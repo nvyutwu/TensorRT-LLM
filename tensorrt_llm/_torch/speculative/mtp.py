@@ -1349,7 +1349,7 @@ class MTPEagleWorker(MTPWorker):
             spec_metadata.batch_indices_cuda, batch_size, num_accepted_tokens)
         return next_draft_tokens, next_new_tokens
 
-    @torch.compile(options={"max-autotune": True})
+    @torch.compile(options={"max-autotune": True}, dynamic=True)
     def prepare_drafter_inputs(
         self,
         input_ids: torch.IntTensor,
