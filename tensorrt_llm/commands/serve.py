@@ -7,7 +7,7 @@ import socket
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
 import click
 import torch
@@ -257,10 +257,13 @@ def launch_server(
         server_role: Optional[ServerRole] = None,
         disagg_cluster_config: Optional[DisaggClusterConfig] = None,
         multimodal_server_config: Optional[MultimodalServerConfig] = None,
-        served_model_name: Optional[str] = None):
+        served_model_name: Optional[Sequence[str]] = None):
 
     backend = llm_args["backend"]
-    model = served_model_name or llm_args["model"]
+    # served_model_name may be a sequence (tuple from click's multiple=True, or list).
+    # Normalize to a list; empty sequence is treated as None.
+    served_model_names: List[str] = list(served_model_name) if served_model_name else []
+    model = served_model_names[0] if served_model_names else llm_args["model"]
     addr_info = socket.getaddrinfo(host, port, socket.AF_UNSPEC,
                                    socket.SOCK_STREAM)
     address_family = socket.AF_INET6 if all(
@@ -293,7 +296,7 @@ def launch_server(
                 param_hint="backend")
 
         server = OpenAIServer(generator=llm,
-                              model=model,
+                              model=served_model_names if served_model_names else model,
                               tool_parser=tool_parser,
                               server_role=server_role,
                               metadata_server_cfg=metadata_server_cfg,
@@ -311,7 +314,7 @@ def launch_server(
 def launch_grpc_server(host: str,
                        port: int,
                        llm_args: dict,
-                       served_model_name: Optional[str] = None):
+                       served_model_name: Optional[Sequence[str]] = None):
     """
     Launch a gRPC server for TensorRT-LLM.
 
@@ -340,7 +343,8 @@ def launch_grpc_server(host: str,
         logger.info("Initializing TensorRT-LLM gRPC server...")
 
         backend = llm_args.get("backend")
-        model_path = served_model_name or llm_args.get("model", "")
+        _names = list(served_model_name) if served_model_name else []
+        model_path = _names[0] if _names else llm_args.get("model", "")
 
         if backend == "pytorch":
             llm_args.pop("build_config", None)
@@ -727,11 +731,12 @@ class ChoiceWithAlias(click.Choice):
 @click.option(
     "--served_model_name",
     type=str,
+    multiple=True,
     default=None,
     help=help_info_with_stability_tag(
-        "The model name used in the API. If not specified, the model path is "
-        "used as the model name. This is useful when the model path is long or "
-        "when you want to expose a custom name to clients.", "prototype"))
+        "The model name(s) used in the API. Can be specified multiple times for aliases. "
+        "The first name is primary; additional names are aliases that the server also accepts. "
+        "If not specified, the model path is used as the model name.", "prototype"))
 @click.option("--extra_visual_gen_options",
               type=str,
               default=None,
@@ -754,7 +759,7 @@ def serve(
         otlp_traces_endpoint: Optional[str], enable_chunked_prefill: bool,
         disagg_cluster_uri: Optional[str], media_io_kwargs: Optional[str],
         custom_module_dirs: list[Path], chat_template: Optional[str],
-        grpc: bool, served_model_name: Optional[str],
+        grpc: bool, served_model_name: Tuple[str, ...],
         extra_visual_gen_options: Optional[str]):
     """Running an OpenAI API compatible server
 

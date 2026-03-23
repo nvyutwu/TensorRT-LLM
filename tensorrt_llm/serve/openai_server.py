@@ -14,7 +14,7 @@ from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import (Annotated, Any, AsyncGenerator, AsyncIterator, List,
-                    Optional, Union)
+                    Optional, Sequence, Union)
 
 import uvicorn
 from fastapi import Body, FastAPI, Request
@@ -98,7 +98,7 @@ class OpenAIServer:
     def __init__(
             self,
             generator: Union[LLM, MultimodalEncoder, VisualGen],
-            model: str,
+            model: Union[str, Sequence[str]],
             tool_parser: Optional[str],
             server_role: Optional[ServerRole],
             metadata_server_cfg: MetadataServerConfig,
@@ -117,11 +117,20 @@ class OpenAIServer:
         self.host = None
         self.port = None
 
-        model_dir = Path(model)
-        if model_dir.exists() and model_dir.is_dir():
-            self.model = model_dir.name
+        # Normalize model names: accept either a single string or a list/tuple of strings.
+        # self.model is the primary name; self.served_model_names includes all aliases.
+        if isinstance(model, (list, tuple)):
+            names = list(model)
         else:
-            self.model = model
+            names = [model]
+        primary = names[0] if names else ""
+        model_dir = Path(primary)
+        if model_dir.exists() and model_dir.is_dir():
+            primary = model_dir.name
+        self.model = primary
+        self.served_model_names: List[str] = [primary] + [
+            n for n in names[1:] if n != primary
+        ]
         self.metrics_collector = None
         self.perf_metrics = None
         self.perf_metrics_lock = None
@@ -584,7 +593,7 @@ class OpenAIServer:
                     "role": "user",
                     "content": "hi"
                 }],  # Minimal prompt (often > 1 token after tokenization)
-                model=self.model,
+                model=self.model,  # Use primary model name for health checks
                 max_completion_tokens=1,  # Request only 1 token out
                 stream=False,
                 temperature=0.0,  # Deterministic output
@@ -621,8 +630,14 @@ class OpenAIServer:
         ver = {"version": VERSION}
         return JSONResponse(content=ver)
 
+    def _resolve_model_name(self, requested: Optional[str]) -> str:
+        """Return the requested model name if it is a known alias, else the primary name."""
+        if requested and requested in self.served_model_names:
+            return requested
+        return self.model
+
     async def get_model(self) -> JSONResponse:
-        model_list = ModelList(data=[ModelCard(id=self.model)])
+        model_list = ModelList(data=[ModelCard(id=name) for name in self.served_model_names])
         return JSONResponse(content=model_list.model_dump())
 
     async def get_iteration_stats(self) -> JSONResponse:
@@ -1010,7 +1025,7 @@ class OpenAIServer:
                 int(h["tensor_size"][0]) for h in mm_embedding_handles)
             return ChatCompletionResponse(
                 id=str(promise.request_id),
-                model=self.model,
+                model=self._resolve_model_name(request.model),
                 choices=[
                     ChatCompletionResponseChoice(
                         index=0,
@@ -1121,7 +1136,7 @@ class OpenAIServer:
                     cached_tokens=num_cached_tokens, ),
             )
             merged_rsp = CompletionResponse(
-                model=self.model,
+                model=self._resolve_model_name(request.model),
                 choices=all_choices,
                 usage=usage_info,
                 prompt_token_ids=all_prompt_token_ids,
@@ -1384,7 +1399,7 @@ class OpenAIServer:
                     generator=promise,
                     request=request,
                     sampling_params=args.sampling_params,
-                    model_name=self.model,
+                    model_name=self._resolve_model_name(request.model),
                     conversation_store=self.conversation_store,
                     generation_result=None,
                     enable_store=self.enable_store and request.store,
@@ -1453,7 +1468,7 @@ class OpenAIServer:
                 streaming_processor = ResponsesStreamingProcessor(
                     request=request,
                     sampling_params=sampling_params,
-                    model_name=self.model,
+                    model_name=self._resolve_model_name(request.model),
                     conversation_store=self.conversation_store,
                     enable_store=self.enable_store and request.store,
                     use_harmony=self.use_harmony,
@@ -1462,7 +1477,7 @@ class OpenAIServer:
                 )
 
             postproc_args = ResponsesAPIPostprocArgs(
-                model=self.model,
+                model=self._resolve_model_name(request.model),
                 request=request,
                 sampling_params=sampling_params,
                 use_harmony=self.use_harmony,
