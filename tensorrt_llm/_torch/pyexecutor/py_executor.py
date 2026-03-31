@@ -2320,14 +2320,17 @@ class PyExecutor:
 
     def _process_previous_batch(self):
         self._handle_canceled_requests()
-        finished_requests = self._handle_responses()
         scheduled_requests = self.previous_batch.scheduled_requests
         attn_metadata = getattr(self.model_engine, 'attn_metadata', None)
         kv_cache_dtype_byte_size = getattr(self.model_engine,
                                            'kv_cache_dtype_byte_size', None)
+        # Same ordering fix as _executor_loop/_handle_executed_batch:
+        # update_resources (store_context_blocks) must run before _handle_responses
+        # (remove_sequence) while the sequence is still in the KV cache map.
         self.resource_manager.update_resources(scheduled_requests,
                                                attn_metadata,
                                                kv_cache_dtype_byte_size)
+        finished_requests = self._handle_responses()
         if self.enable_kv_cache_events:
             self._add_kv_cache_events()
 
