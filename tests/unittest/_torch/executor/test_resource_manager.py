@@ -981,7 +981,7 @@ class TestKvCacheStoreContextBlocksOrdering:
         mgr.store_context_blocks(req)
 
         captured = capfd.readouterr()
-        assert "Can not find sequence" in captured.err, (
+        assert "Can not find sequence" in captured.out, (
             "Expected the C++ WARNING to appear in stderr. "
             "If not present, check tensorrt_llm log level or capfd interception.")
 
@@ -1005,7 +1005,7 @@ class TestKvCacheStoreContextBlocksOrdering:
         mgr.remove_sequence(req.py_request_id, req, False)
 
         captured = capfd.readouterr()
-        assert "Can not find sequence" not in captured.err, (
+        assert "Can not find sequence" not in captured.out, (
             "Fix B should prevent this WARNING by storing context blocks before "
             "the sequence is removed.")
 
@@ -1033,7 +1033,7 @@ class TestKvCacheStoreContextBlocksOrdering:
             mgr.remove_sequence(req.py_request_id, req, False)
 
         captured = capfd.readouterr()
-        assert "Can not find sequence" not in captured.err
+        assert "Can not find sequence" not in captured.out
 
     def test_2b_normal_completion_no_warning(self, capfd):
         """
@@ -1050,7 +1050,7 @@ class TestKvCacheStoreContextBlocksOrdering:
         mgr.store_context_blocks(req)
 
         captured = capfd.readouterr()
-        assert "Can not find sequence" not in captured.err
+        assert "Can not find sequence" not in captured.out
 
         # Later: generation finishes, sequence freed normally
         mgr.remove_sequence(req.py_request_id, req, False)
