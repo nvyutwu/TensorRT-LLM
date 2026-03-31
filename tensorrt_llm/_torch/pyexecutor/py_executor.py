@@ -1580,7 +1580,9 @@ class PyExecutor:
                     self._send_kv_async(finished_ctx_reqs)
                 self._handle_canceled_requests()
 
-                finished_requests = self._handle_responses()
+                # update_resources before _handle_responses: same ordering fix as
+                # the non-overlap path — store_context_blocks must run while the
+                # sequence is still in the KV cache map.
                 attn_metadata = getattr(self.model_engine, 'attn_metadata',
                                         None)
                 kv_cache_dtype_byte_size = getattr(self.model_engine,
@@ -1588,6 +1590,7 @@ class PyExecutor:
                                                    None)
                 self.resource_manager.update_resources(
                     scheduled_requests, attn_metadata, kv_cache_dtype_byte_size)
+                finished_requests = self._handle_responses()
 
                 self._remove_inflight_ids(scheduled_requests)
 
@@ -1890,11 +1893,14 @@ class PyExecutor:
                     self._send_kv_async(scheduled_batch.all_requests())
 
                     self._handle_canceled_requests()
-                    finished_requests = self._handle_responses()
-                    # Compute GPU times after _handle_responses creates metric entries
-                    # (safe in non-overlap mode: no next iteration to overwrite events)
-                    self.perf_manager.compute_batch_gpu_times(
-                        scheduled_batch.all_requests())
+                    # update_resources must run before _handle_responses so that
+                    # store_context_blocks is called while the sequence is still in
+                    # the KV cache manager's tracking map.  _handle_responses calls
+                    # _terminate_request → free_resources → removeSequence, which
+                    # extracts and destroys the sequence node.  If update_resources
+                    # ran after, store_context_blocks would find no sequence and log
+                    # a spurious WARNING, and the context blocks would not be stored
+                    # for prefix-cache reuse.
                     attn_metadata = getattr(self.model_engine, 'attn_metadata',
                                             None)
                     kv_cache_dtype_byte_size = getattr(
@@ -1902,6 +1908,11 @@ class PyExecutor:
                     self.resource_manager.update_resources(
                         scheduled_batch, attn_metadata,
                         kv_cache_dtype_byte_size)
+                    finished_requests = self._handle_responses()
+                    # Compute GPU times after _handle_responses creates metric entries
+                    # (safe in non-overlap mode: no next iteration to overwrite events)
+                    self.perf_manager.compute_batch_gpu_times(
+                        scheduled_batch.all_requests())
                     if self.enable_kv_cache_events:
                         self._add_kv_cache_events()
 

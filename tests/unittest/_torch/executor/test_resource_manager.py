@@ -880,3 +880,176 @@ class TestResourceManager(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Fix-B regression tests: KV cache store/remove ordering for cancelled requests
+#
+# These tests verify the fix for the race condition in py_executor where
+# store_context_blocks was called AFTER remove_sequence for a cancelled context
+# request, producing:
+#   WARNING: [kv cache manager] storeContextBlocks: Can not find sequence for request N
+#
+# The tests use the real C++ KVCacheManager (via pybind) so that the WARNING
+# comes from the actual compiled code — no wheel rebuild is needed.
+# capfd captures C++ output to file-descriptor 2 at the OS level.
+#
+# Tests 1a/1b: reproduce the bug, then verify the fix eliminates the WARNING.
+# Tests 2a/2b: regression guards for normal (non-cancelled) completion.
+# ---------------------------------------------------------------------------
+
+KVCacheManagerCpp = tensorrt_llm.bindings.internal.batch_manager.KVCacheManager
+
+
+def _make_minimal_kv_cache_manager_cpp():
+    """
+    Create the smallest valid KVCacheManagerCpp instance for ordering tests.
+    Requires a GPU (pool allocation writes to CUDA device memory).
+    Uses enable_block_reuse=True to match production config where the WARNING
+    matters (prefix caching).
+    """
+    MAX_SEQ_LEN = 64
+    TOKENS_PER_BLOCK = 8
+    # 4 tokens/seq → 1 block/seq; reserve 16 blocks for up to 8 concurrent seqs
+    NUM_PRIMARY_BLOCKS = 16
+
+    stream = torch.cuda.Stream()
+    mgr = KVCacheManagerCpp(
+        num_kv_heads_per_layer=[2],
+        size_per_head=16,
+        tokens_per_block=TOKENS_PER_BLOCK,
+        blocks_per_window={MAX_SEQ_LEN: (NUM_PRIMARY_BLOCKS, 0)},
+        max_num_sequences=8,
+        max_beam_width=1,
+        max_attention_window_vec=[MAX_SEQ_LEN],
+        temp_attention_window_inputs=None,
+        dtype=DataType.HALF,
+        sink_token_length=0,
+        stream=stream.cuda_stream,
+        max_sequence_length=MAX_SEQ_LEN,
+        enable_block_reuse=True,
+    )
+    mgr.allocate_pools()
+    return mgr
+
+
+def _make_test_llm_request(request_id: int, num_tokens: int = 4):
+    """Create a minimal LlmRequest with real C++ bindings (no LoRA)."""
+    sampling_params = tensorrt_llm.sampling_params.SamplingParams()
+    sampling_config = tensorrt_llm.bindings.SamplingConfig(
+        sampling_params._get_sampling_config())
+    return LlmRequest(
+        request_id=request_id,
+        max_new_tokens=num_tokens,
+        input_tokens=list(range(1, num_tokens + 1)),
+        sampling_config=sampling_config,
+        is_streaming=False,
+    )
+
+
+@pytest.mark.gpu
+class TestKvCacheStoreContextBlocksOrdering:
+    """
+    GPU-level reproduction of the store_context_blocks / remove_sequence ordering
+    bug and verification that Fix B eliminates the WARNING.
+
+    All tests use the real C++ KVCacheManager via pybind so that TLLM_LOG_WARNING
+    is exercised directly. capfd captures C++ output to fd 2.
+    """
+
+    def test_1a_warning_fires_with_buggy_order(self, capfd):
+        """
+        REPRODUCE THE BUG: calling store_context_blocks AFTER remove_sequence
+        triggers WARNING 'Can not find sequence for request N'.
+
+        This test documents the broken state *before* Fix B. It should PASS
+        (the WARNING IS present) when run against the unfixed code, and can be
+        used as a reference baseline.
+        """
+        tensorrt_llm.logger.set_level('warning')
+        mgr = _make_minimal_kv_cache_manager_cpp()
+        req = _make_test_llm_request(request_id=1, num_tokens=4)
+
+        # Scheduler allocated KV cache blocks for the context request
+        mgr.add_sequence(req.py_request_id, 4, 1)
+
+        # Buggy order: _handle_responses removes the sequence first ...
+        mgr.remove_sequence(req.py_request_id)
+
+        # ... then update_resources tries to store context blocks → WARNING
+        mgr.store_context_blocks(req)
+
+        captured = capfd.readouterr()
+        assert "Can not find sequence" in captured.err, (
+            "Expected the C++ WARNING to appear in stderr. "
+            "If not present, check tensorrt_llm log level or capfd interception.")
+
+    def test_1b_no_warning_with_fixed_order(self, capfd):
+        """
+        VERIFY THE FIX: store_context_blocks called BEFORE remove_sequence
+        — no WARNING emitted.
+
+        This is the ordering that Fix B establishes in py_executor.
+        """
+        tensorrt_llm.logger.set_level('warning')
+        mgr = _make_minimal_kv_cache_manager_cpp()
+        req = _make_test_llm_request(request_id=2, num_tokens=4)
+
+        mgr.add_sequence(req.py_request_id, 4, 1)
+
+        # Fixed order (Fix B): update_resources stores blocks while sequence exists
+        mgr.store_context_blocks(req)
+
+        # Then _handle_responses removes the sequence
+        mgr.remove_sequence(req.py_request_id)
+
+        captured = capfd.readouterr()
+        assert "Can not find sequence" not in captured.err, (
+            "Fix B should prevent this WARNING by storing context blocks before "
+            "the sequence is removed.")
+
+    def test_2a_bulk_cancellations_no_warning_fixed_order(self, capfd):
+        """
+        Production scenario (reduced scale): multiple requests cancelled in the
+        same iteration. Fixed order must produce zero WARNINGs.
+        """
+        tensorrt_llm.logger.set_level('warning')
+        mgr = _make_minimal_kv_cache_manager_cpp()
+
+        # 8 requests (bounded by NUM_PRIMARY_BLOCKS=16 and blocks/seq=1)
+        N = 8
+        requests = [
+            _make_test_llm_request(request_id=i, num_tokens=4) for i in range(N)
+        ]
+
+        for req in requests:
+            mgr.add_sequence(req.py_request_id, 4, 1)
+
+        # Fixed order: all stores before all removes
+        for req in requests:
+            mgr.store_context_blocks(req)
+        for req in requests:
+            mgr.remove_sequence(req.py_request_id)
+
+        captured = capfd.readouterr()
+        assert "Can not find sequence" not in captured.err
+
+    def test_2b_normal_completion_no_warning(self, capfd):
+        """
+        Regression: a request that completes context phase normally (not
+        cancelled) must not trigger any WARNING.
+        """
+        tensorrt_llm.logger.set_level('warning')
+        mgr = _make_minimal_kv_cache_manager_cpp()
+        req = _make_test_llm_request(request_id=99, num_tokens=4)
+
+        mgr.add_sequence(req.py_request_id, 4, 1)
+
+        # store during context completion (sequence still alive)
+        mgr.store_context_blocks(req)
+
+        captured = capfd.readouterr()
+        assert "Can not find sequence" not in captured.err
+
+        # Later: generation finishes, sequence freed normally
+        mgr.remove_sequence(req.py_request_id)

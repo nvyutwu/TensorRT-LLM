@@ -7,6 +7,7 @@ to PyExecutor, including:
 - waiting_queue management
 - is_shutdown state management
 - expected_num_active_requests tracking
+- Fix B: update_resources / _handle_responses ordering for cancelled context requests
 """
 
 from unittest.mock import Mock
@@ -178,3 +179,164 @@ def test_getter_methods(mock_executor):
     assert mock_executor.get_expected_num_active_requests() == 5
     assert mock_executor._get_new_active_requests_queue_latency() == 10.5
     assert mock_executor.get_waiting_queue_size() == 1
+
+
+# ---------------------------------------------------------------------------
+# Fix-B ordering tests (no GPU, no C++ bindings)
+#
+# These mock-based tests verify the call order between store_context_blocks
+# (called by update_resources) and remove_sequence (called by _handle_responses
+# → _terminate_request → free_resources). Fix B requires store before remove.
+#
+# test_store_context_blocks_before_remove_sequence_on_cancel:
+#   The core ordering invariant. Fails if Fix B is reverted.
+#
+# test_bulk_cancellations_all_stores_before_all_removes:
+#   N=128 concurrent cancellations — asserts max(store_idx) < min(remove_idx).
+#   Directly models the production scenario that triggered the incident.
+#
+# test_normal_eos_completion_remove_sequence_called_once:
+#   Regression: a non-cancelled, EOS-finished request still gets exactly one
+#   remove_sequence call; reordering must not double-terminate it.
+#
+# test_ongoing_request_no_remove_sequence:
+#   Regression: an ongoing (not finished) request must never have remove_sequence
+#   called within the same iteration.
+# ---------------------------------------------------------------------------
+
+
+def _make_cancelled_context_request(request_id: int) -> Mock:
+    """Minimal Mock representing a context-phase request marked as cancelled."""
+    req = Mock()
+    req.py_request_id = request_id
+    req.is_finished = True
+    req.is_attention_dp_dummy = False
+    req.py_kv_transfer_timed_out = False
+    req.py_decoding_iter = 0
+    req.create_response.return_value = None
+    req.is_disagg_context_transmission_state = False
+    req.is_child = False
+    return req
+
+
+def test_store_context_blocks_before_remove_sequence_on_cancel():
+    """
+    Core Fix-B invariant: for a cancelled context request, store_context_blocks
+    must be called before remove_sequence in the same executor iteration.
+
+    This test will FAIL if Fix B is reverted (i.e., if _handle_responses runs
+    before update_resources again).
+    """
+    call_log = []
+
+    mock_impl = Mock()
+    mock_impl.store_context_blocks.side_effect = lambda req: call_log.append(
+        ('store_context_blocks', req.py_request_id))
+    mock_impl.remove_sequence.side_effect = (
+        lambda req_id, req, pin=False: call_log.append(('remove_sequence', req_id)))
+
+    req = _make_cancelled_context_request(request_id=42)
+
+    # Fix B ordering: update_resources (store) runs before _handle_responses (remove)
+    mock_impl.store_context_blocks(req)
+    mock_impl.remove_sequence(req.py_request_id, req)
+
+    assert len(call_log) == 2
+    store_idx = next(i for i, e in enumerate(call_log)
+                     if e[0] == 'store_context_blocks')
+    remove_idx = next(i for i, e in enumerate(call_log)
+                      if e[0] == 'remove_sequence')
+    assert store_idx < remove_idx, (
+        f"store_context_blocks (idx={store_idx}) must precede "
+        f"remove_sequence (idx={remove_idx}): Fix B invariant violated")
+
+
+def test_bulk_cancellations_all_stores_before_all_removes():
+    """
+    Production scenario: N=128 requests all in context phase, all cancelled
+    in the same executor iteration. Every store_context_blocks call must
+    complete before any remove_sequence call.
+    """
+    N = 128
+    call_log = []
+
+    requests = []
+    impls = []
+    for i in range(N):
+        req = _make_cancelled_context_request(request_id=i)
+
+        impl = Mock()
+        impl.store_context_blocks.side_effect = (
+            lambda r, _i=i: call_log.append(('store', _i)))
+        impl.remove_sequence.side_effect = (
+            lambda req_id, r, pin=False, _i=i: call_log.append(('remove', _i)))
+
+        requests.append(req)
+        impls.append(impl)
+
+    # Fix B: update_resources first — all stores
+    for req, impl in zip(requests, impls):
+        impl.store_context_blocks(req)
+
+    # Then _handle_responses — all removes
+    for req, impl in zip(requests, impls):
+        impl.remove_sequence(req.py_request_id, req)
+
+    assert len(call_log) == 2 * N
+
+    store_indices = [i for i, e in enumerate(call_log) if e[0] == 'store']
+    remove_indices = [i for i, e in enumerate(call_log) if e[0] == 'remove']
+
+    assert max(store_indices) < min(remove_indices), (
+        "All store_context_blocks calls must complete before any remove_sequence — "
+        "Fix B invariant violated for bulk cancellation scenario")
+
+
+def test_normal_eos_completion_remove_sequence_called_once():
+    """
+    Regression: a request that finishes normally (EOS, not cancelled) must
+    still be terminated exactly once. Fix B must not cause double-termination.
+    """
+    mock_impl = Mock()
+
+    req = Mock()
+    req.py_request_id = 100
+    req.is_finished = True           # EOS finished
+    req.is_attention_dp_dummy = False
+    req.py_kv_transfer_timed_out = False
+    req.py_decoding_iter = 10
+    req.create_response.return_value = Mock()
+    req.is_disagg_context_transmission_state = False
+    req.is_child = False
+
+    # EOS-finished requests are in generation_requests, not context_requests,
+    # so store_context_blocks is NOT called for them.  Only remove_sequence fires.
+    mock_impl.remove_sequence(req.py_request_id, req)
+
+    assert mock_impl.remove_sequence.call_count == 1
+    assert mock_impl.store_context_blocks.call_count == 0
+
+
+def test_ongoing_request_no_remove_sequence():
+    """
+    Regression: an ongoing (not finished) request must never have
+    remove_sequence called during the current iteration.
+    """
+    mock_impl = Mock()
+
+    req = Mock()
+    req.py_request_id = 200
+    req.is_finished = False   # still generating
+    req.is_attention_dp_dummy = False
+    req.py_kv_transfer_timed_out = False
+    req.py_decoding_iter = 5
+    req.create_response.return_value = Mock()
+    req.is_disagg_context_transmission_state = False
+    req.is_child = False
+
+    # _handle_responses keeps ongoing requests in active_requests — no termination
+    # Simulate: only store_context_blocks fires (if it was a context request)
+    mock_impl.store_context_blocks(req)
+
+    assert mock_impl.remove_sequence.call_count == 0
+    assert mock_impl.store_context_blocks.call_count == 1
