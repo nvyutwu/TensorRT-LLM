@@ -7,6 +7,7 @@ from typing import NamedTuple, Tuple
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 import torch
 
 import tensorrt_llm
