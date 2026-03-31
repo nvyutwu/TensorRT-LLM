@@ -972,10 +972,10 @@ class TestKvCacheStoreContextBlocksOrdering:
         req = _make_test_llm_request(request_id=1, num_tokens=4)
 
         # Scheduler allocated KV cache blocks for the context request
-        mgr.add_sequence(req.py_request_id, 4, 1)
+        mgr.add_sequence(req.py_request_id, 4, 1, req)
 
         # Buggy order: _handle_responses removes the sequence first ...
-        mgr.remove_sequence(req.py_request_id)
+        mgr.remove_sequence(req.py_request_id, req, False)
 
         # ... then update_resources tries to store context blocks → WARNING
         mgr.store_context_blocks(req)
@@ -996,13 +996,13 @@ class TestKvCacheStoreContextBlocksOrdering:
         mgr = _make_minimal_kv_cache_manager_cpp()
         req = _make_test_llm_request(request_id=2, num_tokens=4)
 
-        mgr.add_sequence(req.py_request_id, 4, 1)
+        mgr.add_sequence(req.py_request_id, 4, 1, req)
 
         # Fixed order (Fix B): update_resources stores blocks while sequence exists
         mgr.store_context_blocks(req)
 
         # Then _handle_responses removes the sequence
-        mgr.remove_sequence(req.py_request_id)
+        mgr.remove_sequence(req.py_request_id, req, False)
 
         captured = capfd.readouterr()
         assert "Can not find sequence" not in captured.err, (
@@ -1024,13 +1024,13 @@ class TestKvCacheStoreContextBlocksOrdering:
         ]
 
         for req in requests:
-            mgr.add_sequence(req.py_request_id, 4, 1)
+            mgr.add_sequence(req.py_request_id, 4, 1, req)
 
         # Fixed order: all stores before all removes
         for req in requests:
             mgr.store_context_blocks(req)
         for req in requests:
-            mgr.remove_sequence(req.py_request_id)
+            mgr.remove_sequence(req.py_request_id, req, False)
 
         captured = capfd.readouterr()
         assert "Can not find sequence" not in captured.err
@@ -1044,7 +1044,7 @@ class TestKvCacheStoreContextBlocksOrdering:
         mgr = _make_minimal_kv_cache_manager_cpp()
         req = _make_test_llm_request(request_id=99, num_tokens=4)
 
-        mgr.add_sequence(req.py_request_id, 4, 1)
+        mgr.add_sequence(req.py_request_id, 4, 1, req)
 
         # store during context completion (sequence still alive)
         mgr.store_context_blocks(req)
@@ -1053,4 +1053,4 @@ class TestKvCacheStoreContextBlocksOrdering:
         assert "Can not find sequence" not in captured.err
 
         # Later: generation finishes, sequence freed normally
-        mgr.remove_sequence(req.py_request_id)
+        mgr.remove_sequence(req.py_request_id, req, False)
