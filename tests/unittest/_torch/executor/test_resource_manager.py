@@ -930,7 +930,7 @@ def _make_minimal_kv_cache_manager_cpp():
         max_sequence_length=MAX_SEQ_LEN,
         enable_block_reuse=True,
     )
-    mgr.allocate_pools()
+    mgr.allocate_pools(False)
     return mgr
 
 
