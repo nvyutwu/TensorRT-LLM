@@ -277,10 +277,13 @@ def launch_server(
         server_role: Optional[ServerRole] = None,
         disagg_cluster_config: Optional[DisaggClusterConfig] = None,
         multimodal_server_config: Optional[MultimodalServerConfig] = None,
-        served_model_name: Optional[str] = None):
+        served_model_name: Optional[Sequence[str]] = None):
 
     backend = llm_args["backend"]
-    model = served_model_name or llm_args["model"]
+    # served_model_name may be a sequence (tuple from click's multiple=True, or list).
+    # Drop empty strings (click passes "" through) so downstream sees only real names.
+    served_model_names: list[str] = [n for n in (served_model_name or []) if n]
+    model = served_model_names[0] if served_model_names else llm_args["model"]
     addr_info = socket.getaddrinfo(host, port, socket.AF_UNSPEC,
                                    socket.SOCK_STREAM)
     address_family = socket.AF_INET6 if all(
@@ -312,14 +315,15 @@ def launch_server(
                 f"{backend} is not a known backend, check help for available options.",
                 param_hint="backend")
 
-        server = OpenAIServer(generator=llm,
-                              model=model,
-                              tool_parser=tool_parser,
-                              server_role=server_role,
-                              metadata_server_cfg=metadata_server_cfg,
-                              disagg_cluster_config=disagg_cluster_config,
-                              multimodal_server_config=multimodal_server_config,
-                              chat_template=chat_template)
+        server = OpenAIServer(
+            generator=llm,
+            model=served_model_names if served_model_names else model,
+            tool_parser=tool_parser,
+            server_role=server_role,
+            metadata_server_cfg=metadata_server_cfg,
+            disagg_cluster_config=disagg_cluster_config,
+            multimodal_server_config=multimodal_server_config,
+            chat_template=chat_template)
 
         # Optionally disable GC (default: not disabled)
         if os.getenv("TRTLLM_SERVER_DISABLE_GC", "0") == "1":
@@ -331,7 +335,7 @@ def launch_server(
 def launch_grpc_server(host: str,
                        port: int,
                        llm_args: dict,
-                       served_model_name: Optional[str] = None):
+                       served_model_name: Optional[Sequence[str]] = None):
     """
     Launch a gRPC server for TensorRT-LLM.
 
@@ -342,7 +346,9 @@ def launch_grpc_server(host: str,
         host: Host to bind to
         port: Port to bind to
         llm_args: Arguments for LLM initialization (from get_llm_args)
-        served_model_name: Custom model name for API responses (defaults to model path)
+        served_model_name: Model name(s) for API responses (defaults to model path).
+            Note: the gRPC server only uses the first (primary) name. Multiple
+            aliases are supported by the HTTP/OpenAI server only.
     """
     import grpc
 
@@ -360,7 +366,8 @@ def launch_grpc_server(host: str,
         logger.info("Initializing TensorRT-LLM gRPC server...")
 
         backend = llm_args.get("backend")
-        model_path = served_model_name or llm_args.get("model", "")
+        _names = [n for n in (served_model_name or []) if n]
+        model_path = _names[0] if _names else llm_args.get("model", "")
 
         if backend == "pytorch":
             llm_args.pop("build_config", None)
@@ -782,11 +789,13 @@ class ChoiceWithAlias(click.Choice):
 @click.option(
     "--served_model_name",
     type=str,
+    multiple=True,
     default=None,
     help=help_info_with_stability_tag(
-        "The model name used in the API. If not specified, the model path is "
-        "used as the model name. This is useful when the model path is long or "
-        "when you want to expose a custom name to clients.", "prototype"))
+        "The model name(s) used in the API. Can be specified multiple times for aliases. "
+        "The first name is primary; additional names are aliases that the server also accepts. "
+        "If not specified, the model path is used as the model name.",
+        "prototype"))
 @click.option("--extra_visual_gen_options",
               type=str,
               default=None,
@@ -810,8 +819,8 @@ def serve(
         enable_attention_dp: bool, disagg_cluster_uri: Optional[str],
         media_io_kwargs: Optional[str], video_pruning_rate: Optional[float],
         telemetry: bool, custom_module_dirs: list[Path],
-        chat_template: Optional[str], grpc: bool,
-        served_model_name: Optional[str],
+        chat_template: Optional[str], grpc: bool, served_model_name: tuple[str,
+                                                                           ...],
         extra_visual_gen_options: Optional[str]):
     """Running an OpenAI API compatible server
 
