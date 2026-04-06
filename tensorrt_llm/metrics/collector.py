@@ -169,8 +169,7 @@ class MetricsCollector:
 
         self.histogram_inference_time_request = Histogram(
             name=self.metric_prefix + "request_inference_time_seconds",
-            documentation=
-            "Histogram of total inference duration in seconds "
+            documentation="Histogram of total inference duration in seconds "
             "(last_token_time - first_scheduled_time).",
             buckets=_decode_inference_buckets,
             labelnames=self.labels.keys())
@@ -219,8 +218,7 @@ class MetricsCollector:
             labelnames=self.labels.keys())
         self.counter_num_requests_completed = Counter(
             name=self.metric_prefix + "num_requests_completed_total",
-            documentation=
-            "Total number of completed requests across iterations",
+            documentation="Total number of completed requests across iterations",
             labelnames=self.labels.keys())
         self.max_num_active_requests = Gauge(
             name=self.metric_prefix + "max_num_active_requests",
@@ -302,37 +300,34 @@ class MetricsCollector:
             labelnames=self.labels.keys())
         self.avg_decoded_tokens_per_iter = Gauge(
             name=self.metric_prefix + "avg_decoded_tokens_per_iter",
-            documentation=
-            "Average number of decoded tokens per iteration",
+            documentation="Average number of decoded tokens per iteration",
             labelnames=self.labels.keys())
 
         # Speculative decoding metrics
         self.counter_spec_decode_num_draft_tokens = Counter(
             name=self.metric_prefix + "spec_decode_num_draft_tokens_total",
-            documentation=
-            "Total number of draft tokens in speculative decoding",
+            documentation="Total number of draft tokens in speculative decoding",
             labelnames=self.labels.keys())
         self.counter_spec_decode_num_accepted_tokens = Counter(
-            name=self.metric_prefix +
-            "spec_decode_num_accepted_tokens_total",
+            name=self.metric_prefix + "spec_decode_num_accepted_tokens_total",
             documentation=
             "Total number of accepted tokens in speculative decoding",
             labelnames=self.labels.keys())
         self.spec_decode_acceptance_length = Gauge(
             name=self.metric_prefix + "spec_decode_acceptance_length",
-            documentation=
-            "Acceptance length in speculative decoding",
+            documentation="Acceptance length in speculative decoding",
             labelnames=self.labels.keys())
         self.spec_decode_draft_overhead = Gauge(
             name=self.metric_prefix + "spec_decode_draft_overhead",
             documentation="Draft overhead in speculative decoding",
             labelnames=self.labels.keys())
 
-    def log_config_info(self,
-                        model_config: Optional[Dict[str, str]] = None,
-                        parallel_config: Optional[Dict[str, str]] = None,
-                        speculative_config: Optional[Dict[str, str]] = None,
-                        kv_cache_config: Optional[Dict[str, str]] = None) -> None:
+    def log_config_info(
+            self,
+            model_config: Optional[Dict[str, str]] = None,
+            parallel_config: Optional[Dict[str, str]] = None,
+            speculative_config: Optional[Dict[str, str]] = None,
+            kv_cache_config: Optional[Dict[str, str]] = None) -> None:
         """
         Log static configuration as Prometheus info-style gauges (set to 1 with config labels).
 
@@ -349,18 +344,16 @@ class MetricsCollector:
 
         if model_config:
             info_labels = {**self.labels, **model_config}
-            gauge = Gauge(
-                name=self.metric_prefix + "model_config_info",
-                documentation="Model configuration info",
-                labelnames=info_labels.keys())
+            gauge = Gauge(name=self.metric_prefix + "model_config_info",
+                          documentation="Model configuration info",
+                          labelnames=info_labels.keys())
             gauge.labels(**info_labels).set(1)
 
         if parallel_config:
             info_labels = {**self.labels, **parallel_config}
-            gauge = Gauge(
-                name=self.metric_prefix + "parallel_config_info",
-                documentation="Parallelism configuration info",
-                labelnames=info_labels.keys())
+            gauge = Gauge(name=self.metric_prefix + "parallel_config_info",
+                          documentation="Parallelism configuration info",
+                          labelnames=info_labels.keys())
             gauge.labels(**info_labels).set(1)
 
         if speculative_config:
@@ -373,10 +366,9 @@ class MetricsCollector:
 
         if kv_cache_config:
             info_labels = {**self.labels, **kv_cache_config}
-            gauge = Gauge(
-                name=self.metric_prefix + "kv_cache_config_info",
-                documentation="KV cache configuration info",
-                labelnames=info_labels.keys())
+            gauge = Gauge(name=self.metric_prefix + "kv_cache_config_info",
+                          documentation="KV cache configuration info",
+                          labelnames=info_labels.keys())
             gauge.labels(**info_labels).set(1)
 
     def _label_merge(self, labels: Dict[str, str]) -> Dict[str, str]:
@@ -464,8 +456,7 @@ class MetricsCollector:
                 self._log_histogram(self.histogram_inference_time_request,
                                     inference_time)
             if prompt_tokens := metrics_dict.get(MetricNames.PROMPT_TOKENS, 0):
-                self._log_counter(self.counter_prompt_tokens, {},
-                                  prompt_tokens)
+                self._log_counter(self.counter_prompt_tokens, {}, prompt_tokens)
             if generation_tokens := metrics_dict.get(
                     MetricNames.GENERATION_TOKENS, 0):
                 self._log_counter(self.counter_generation_tokens, {},
@@ -594,15 +585,14 @@ class MetricsCollector:
             if "numDraftTokens" in spec_stats:
                 draft_tokens = spec_stats["numDraftTokens"]
                 if draft_tokens > 0:
-                    self._log_counter(
-                        self.counter_spec_decode_num_draft_tokens,
-                        {}, draft_tokens)
+                    self._log_counter(self.counter_spec_decode_num_draft_tokens,
+                                      {}, draft_tokens)
             if "numAcceptedTokens" in spec_stats:
                 accepted_tokens = spec_stats["numAcceptedTokens"]
                 if accepted_tokens > 0:
                     self._log_counter(
-                        self.counter_spec_decode_num_accepted_tokens,
-                        {}, accepted_tokens)
+                        self.counter_spec_decode_num_accepted_tokens, {},
+                        accepted_tokens)
             if "acceptanceLength" in spec_stats:
                 self._log_gauge(self.spec_decode_acceptance_length,
                                 spec_stats["acceptanceLength"])

@@ -24,8 +24,8 @@ from .enums import MetricNames, RequestEventTiming
 
 
 def process_req_perf_metrics(
-        req_perf_metrics_dict: Optional[dict],
-        output_length: int) -> dict[MetricNames, float | int]:
+    req_perf_metrics_dict: Optional[dict], output_length: int
+) -> dict[MetricNames, float | int]:
     """Compute derived per-request latency and token-count metrics.
 
     Args:
@@ -42,12 +42,9 @@ def process_req_perf_metrics(
         return {}
 
     arrival = req_perf_metrics_dict.get(RequestEventTiming.ARRIVAL_TIME, 0)
-    first_scheduled = req_perf_metrics_dict.get(
-        RequestEventTiming.FIRST_SCHEDULED_TIME, 0)
-    first_token = req_perf_metrics_dict.get(
-        RequestEventTiming.FIRST_TOKEN_TIME, 0)
-    last_token = req_perf_metrics_dict.get(RequestEventTiming.LAST_TOKEN_TIME,
-                                           0)
+    first_scheduled = req_perf_metrics_dict.get(RequestEventTiming.FIRST_SCHEDULED_TIME, 0)
+    first_token = req_perf_metrics_dict.get(RequestEventTiming.FIRST_TOKEN_TIME, 0)
+    last_token = req_perf_metrics_dict.get(RequestEventTiming.LAST_TOKEN_TIME, 0)
 
     stat: dict[MetricNames, float | int] = {}
 
@@ -83,9 +80,8 @@ def process_req_perf_metrics(
     # TPOT = decode duration per output token.  Requires at least 2 tokens
     # (denominator would be 0 for a single-token output) and both timestamps
     # present (first_token=0 default would produce bogus values).
-    if (output_length > 1 and first_token > 0 and last_token > 0):
-        stat[MetricNames.TPOT] = (last_token - first_token) / (output_length -
-                                                                1)
+    if output_length > 1 and first_token > 0 and last_token > 0:
+        stat[MetricNames.TPOT] = (last_token - first_token) / (output_length - 1)
 
     # Filter out non-positive values: negatives indicate clock-skew anomalies
     # and should not be reported; absent timestamps produce 0 which is filtered
@@ -93,8 +89,6 @@ def process_req_perf_metrics(
     result = {k: v for k, v in stat.items() if v > 0}
     # Restore REQUEST_QUEUE_TIME=0 if it was explicitly computed (zero queue
     # time is a valid, meaningful observation).
-    if MetricNames.REQUEST_QUEUE_TIME in stat and stat[
-            MetricNames.REQUEST_QUEUE_TIME] >= 0:
-        result[MetricNames.REQUEST_QUEUE_TIME] = stat[
-            MetricNames.REQUEST_QUEUE_TIME]
+    if MetricNames.REQUEST_QUEUE_TIME in stat and stat[MetricNames.REQUEST_QUEUE_TIME] >= 0:
+        result[MetricNames.REQUEST_QUEUE_TIME] = stat[MetricNames.REQUEST_QUEUE_TIME]
     return result

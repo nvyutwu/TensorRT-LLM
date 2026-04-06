@@ -370,8 +370,10 @@ class OpenAIServer:
         if self.generator.args.return_perf_metrics:
             set_prometheus_multiproc_dir()
             self.metrics_collector = MetricsCollector({
-                "model_name": self.model,
-                "engine_type": self.generator.args.backend or "unknown"
+                "model_name":
+                self.model,
+                "engine_type":
+                self.generator.args.backend or "unknown"
             })
             self._log_config_info_metrics()
             max_perf_metrics = self.generator.args.perf_metrics_max_requests
@@ -392,7 +394,8 @@ class OpenAIServer:
         quant_config = getattr(args, "quant_config", None)
         if quant_config is not None:
             quant_algo = getattr(quant_config, "quant_algo", None)
-            model_config["quantization"] = str(quant_algo) if quant_algo else "none"
+            model_config["quantization"] = str(
+                quant_algo) if quant_algo else "none"
         else:
             model_config["quantization"] = "none"
         max_seq_len = getattr(args, "max_seq_len", None)
@@ -412,7 +415,8 @@ class OpenAIServer:
             tp_size = getattr(par_cfg, "tp_size", 1) or 1
             pp_size = getattr(par_cfg, "pp_size", 1) or 1
             cp_size = getattr(par_cfg, "cp_size", 1) or 1
-            world_size = getattr(par_cfg, "world_size", tp_size * pp_size * cp_size)
+            world_size = getattr(par_cfg, "world_size",
+                                 tp_size * pp_size * cp_size)
         else:
             tp_size = getattr(args, "tensor_parallel_size", 1) or 1
             pp_size = getattr(args, "pipeline_parallel_size", 1) or 1
@@ -430,9 +434,8 @@ class OpenAIServer:
             parallel_config["expert_parallel_size"] = str(ep_size)
 
         # Speculative decoding config
-        spec_config_obj = getattr(args, "speculative_config",
-                                  None) or getattr(args, "decoding_config",
-                                                   None)
+        spec_config_obj = getattr(args, "speculative_config", None) or getattr(
+            args, "decoding_config", None)
         speculative_config = None
         if spec_config_obj is not None:
             speculative_config = {"spec_enabled": "true"}
@@ -864,8 +867,7 @@ class OpenAIServer:
         if self.metrics_collector:
             if res.candidate_metrics:
                 for candidate_m in res.candidate_metrics:
-                    self.metrics_collector.log_request_metrics_dict(
-                        candidate_m)
+                    self.metrics_collector.log_request_metrics_dict(candidate_m)
             elif res.metrics_dict:
                 # Fallback for paths that populate metrics_dict directly
                 # (e.g. PostprocWorker).

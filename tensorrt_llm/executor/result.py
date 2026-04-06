@@ -25,7 +25,8 @@ from ..disaggregated_params import DisaggregatedParams
 from ..llmapi.tracer import global_tracer
 from ..llmapi.utils import AsyncQueue, print_traceback_on_error
 from ..metrics import MetricNames, MetricsCollector, RequestEventTiming
-from ..metrics.perf_utils import process_req_perf_metrics as _process_req_perf_metrics
+from ..metrics.perf_utils import \
+    process_req_perf_metrics as _process_req_perf_metrics
 from ..sampling_params import LogprobParams, SamplingParams
 from .utils import ErrorResponse, has_event_loop, is_llm_response
 
@@ -585,8 +586,7 @@ class GenerationResultBase:
         if output.finish_reason and sequence_index == 0:
             prompt_token_ids = getattr(self, "prompt_token_ids", None)
             if prompt_token_ids is not None and len(prompt_token_ids) > 0:
-                metrics_stats[MetricNames.PROMPT_TOKENS] = len(
-                    prompt_token_ids)
+                metrics_stats[MetricNames.PROMPT_TOKENS] = len(prompt_token_ids)
         self.candidate_metrics.append(metrics_stats)
         self.metrics_dict.update(metrics_stats)
 
@@ -1064,5 +1064,3 @@ def compute_logprobs(
 
     return LogProbsResult(prompt=prompt_logprobs,
                           generation=generation_logprobs)
-
-

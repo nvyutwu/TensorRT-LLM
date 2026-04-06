@@ -27,8 +27,7 @@ def clean_registry():
     """Unregister all custom collectors between tests to avoid duplicate metric errors."""
     collectors_to_remove = []
     for collector in REGISTRY._names_to_collectors.values():
-        if hasattr(collector, '_name') and collector._name.startswith(
-                'trtllm_'):
+        if hasattr(collector, "_name") and collector._name.startswith("trtllm_"):
             collectors_to_remove.append(collector)
     for collector in set(collectors_to_remove):
         try:
@@ -102,37 +101,32 @@ class TestIterationStatsTopLevel:
     def test_completed_requests_counter(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_iteration_stats(SAMPLE_ITERATION_STATS)
-        assert _get_counter_value(collector.counter_num_requests_completed,
-                                  labels) == 2
+        assert _get_counter_value(collector.counter_num_requests_completed, labels) == 2
 
         # Counter should accumulate across iterations
         collector.log_iteration_stats(SAMPLE_ITERATION_STATS)
-        assert _get_counter_value(collector.counter_num_requests_completed,
-                                  labels) == 4
+        assert _get_counter_value(collector.counter_num_requests_completed, labels) == 4
 
     def test_completed_requests_zero_not_incremented(self, collector):
         labels = {"model_name": "test_model"}
         stats = {**SAMPLE_ITERATION_STATS, "numCompletedRequests": 0}
         collector.log_iteration_stats(stats)
-        assert _get_counter_value(collector.counter_num_requests_completed,
-                                  labels) == 0
+        assert _get_counter_value(collector.counter_num_requests_completed, labels) == 0
 
     def test_iteration_latency_ms_to_seconds(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_iteration_stats(SAMPLE_ITERATION_STATS)
-        assert _get_gauge_value(collector.iteration_latency_seconds,
-                                labels) == pytest.approx(0.0155)
+        assert _get_gauge_value(collector.iteration_latency_seconds, labels) == pytest.approx(
+            0.0155
+        )
 
     def test_memory_usage(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_iteration_stats(SAMPLE_ITERATION_STATS)
 
-        assert _get_gauge_value(collector.gpu_memory_usage_bytes,
-                                labels) == 4_000_000_000
-        assert _get_gauge_value(collector.cpu_memory_usage_bytes,
-                                labels) == 2_000_000_000
-        assert _get_gauge_value(collector.pinned_memory_usage_bytes,
-                                labels) == 500_000_000
+        assert _get_gauge_value(collector.gpu_memory_usage_bytes, labels) == 4_000_000_000
+        assert _get_gauge_value(collector.cpu_memory_usage_bytes, labels) == 2_000_000_000
+        assert _get_gauge_value(collector.pinned_memory_usage_bytes, labels) == 500_000_000
 
     def test_batch_size(self, collector):
         labels = {"model_name": "test_model"}
@@ -140,8 +134,7 @@ class TestIterationStatsTopLevel:
 
         assert _get_gauge_value(collector.max_batch_size_static, labels) == 64
         assert _get_gauge_value(collector.max_batch_size_runtime, labels) == 32
-        assert _get_gauge_value(collector.max_num_tokens_runtime,
-                                labels) == 8192
+        assert _get_gauge_value(collector.max_num_tokens_runtime, labels) == 8192
 
 
 class TestKVCacheStats:
@@ -154,20 +147,17 @@ class TestKVCacheStats:
         assert _get_gauge_value(collector.kv_cache_max_blocks, labels) == 1000
         assert _get_gauge_value(collector.kv_cache_free_blocks, labels) == 400
         assert _get_gauge_value(collector.kv_cache_used_blocks, labels) == 600
-        assert _get_gauge_value(collector.kv_cache_tokens_per_block,
-                                labels) == 64
+        assert _get_gauge_value(collector.kv_cache_tokens_per_block, labels) == 64
 
     def test_kv_cache_utilization(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_iteration_stats(SAMPLE_ITERATION_STATS)
-        assert _get_gauge_value(collector.kv_cache_utilization,
-                                labels) == pytest.approx(0.6)
+        assert _get_gauge_value(collector.kv_cache_utilization, labels) == pytest.approx(0.6)
 
     def test_kv_cache_hit_rate(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_iteration_stats(SAMPLE_ITERATION_STATS)
-        assert _get_gauge_value(collector.kv_cache_hit_rate,
-                                labels) == pytest.approx(0.85)
+        assert _get_gauge_value(collector.kv_cache_hit_rate, labels) == pytest.approx(0.85)
 
 
 class TestInflightBatchingStats:
@@ -182,13 +172,11 @@ class TestInflightBatchingStats:
         assert _get_gauge_value(collector.num_paused_requests, labels) == 1
         assert _get_gauge_value(collector.num_scheduled_requests, labels) == 5
         assert _get_gauge_value(collector.total_context_tokens, labels) == 256
-        assert _get_gauge_value(collector.avg_decoded_tokens_per_iter,
-                                labels) == pytest.approx(4.5)
+        assert _get_gauge_value(collector.avg_decoded_tokens_per_iter, labels) == pytest.approx(4.5)
 
     def test_missing_inflight_batching_stats(self, collector):
         """No error when inflightBatchingStats is absent."""
-        stats = {k: v for k, v in SAMPLE_ITERATION_STATS.items()
-                 if k != "inflightBatchingStats"}
+        stats = {k: v for k, v in SAMPLE_ITERATION_STATS.items() if k != "inflightBatchingStats"}
         collector.log_iteration_stats(stats)
 
 
@@ -199,21 +187,16 @@ class TestSpecDecodingStats:
         labels = {"model_name": "test_model"}
         collector.log_iteration_stats(SAMPLE_ITERATION_STATS)
 
-        assert _get_counter_value(
-            collector.counter_spec_decode_num_draft_tokens,
-            labels) == 20
-        assert _get_counter_value(
-            collector.counter_spec_decode_num_accepted_tokens,
-            labels) == 15
-        assert _get_gauge_value(collector.spec_decode_acceptance_length,
-                                labels) == pytest.approx(3.75)
-        assert _get_gauge_value(collector.spec_decode_draft_overhead,
-                                labels) == pytest.approx(1.2)
+        assert _get_counter_value(collector.counter_spec_decode_num_draft_tokens, labels) == 20
+        assert _get_counter_value(collector.counter_spec_decode_num_accepted_tokens, labels) == 15
+        assert _get_gauge_value(collector.spec_decode_acceptance_length, labels) == pytest.approx(
+            3.75
+        )
+        assert _get_gauge_value(collector.spec_decode_draft_overhead, labels) == pytest.approx(1.2)
 
     def test_missing_spec_decoding_stats(self, collector):
         """No error when specDecodingStats is absent."""
-        stats = {k: v for k, v in SAMPLE_ITERATION_STATS.items()
-                 if k != "specDecodingStats"}
+        stats = {k: v for k, v in SAMPLE_ITERATION_STATS.items() if k != "specDecodingStats"}
         collector.log_iteration_stats(stats)
 
 
@@ -224,12 +207,14 @@ class TestPartialStats:
         collector.log_iteration_stats({})
 
     def test_only_kv_cache(self, collector):
-        collector.log_iteration_stats({
-            "kvCacheStats": {
-                "maxNumBlocks": 100,
-                "usedNumBlocks": 50,
+        collector.log_iteration_stats(
+            {
+                "kvCacheStats": {
+                    "maxNumBlocks": 100,
+                    "usedNumBlocks": 50,
+                }
             }
-        })
+        )
         labels = {"model_name": "test_model"}
         assert _get_gauge_value(collector.kv_cache_max_blocks, labels) == 100
         assert _get_gauge_value(collector.kv_cache_used_blocks, labels) == 50
@@ -248,9 +233,12 @@ class TestConfigInfoMetrics:
             "gpu_type": "NVIDIA H100",
         }
         collector.log_config_info(model_config=model_config)
-        assert REGISTRY.get_sample_value("trtllm_model_config_info",
-                                         {"model_name": "test_model",
-                                          **model_config}) == 1.0
+        assert (
+            REGISTRY.get_sample_value(
+                "trtllm_model_config_info", {"model_name": "test_model", **model_config}
+            )
+            == 1.0
+        )
 
     def test_parallel_config_info(self, collector):
         parallel_config = {
@@ -259,9 +247,12 @@ class TestConfigInfoMetrics:
             "gpu_count": "8",
         }
         collector.log_config_info(parallel_config=parallel_config)
-        assert REGISTRY.get_sample_value("trtllm_parallel_config_info",
-                                         {"model_name": "test_model",
-                                          **parallel_config}) == 1.0
+        assert (
+            REGISTRY.get_sample_value(
+                "trtllm_parallel_config_info", {"model_name": "test_model", **parallel_config}
+            )
+            == 1.0
+        )
 
     def test_speculative_config_info(self, collector):
         spec_config = {
@@ -271,9 +262,12 @@ class TestConfigInfoMetrics:
             "spec_draft_model": "eagle-model",
         }
         collector.log_config_info(speculative_config=spec_config)
-        assert REGISTRY.get_sample_value("trtllm_speculative_config_info",
-                                         {"model_name": "test_model",
-                                          **spec_config}) == 1.0
+        assert (
+            REGISTRY.get_sample_value(
+                "trtllm_speculative_config_info", {"model_name": "test_model", **spec_config}
+            )
+            == 1.0
+        )
 
     def test_kv_cache_config_info(self, collector):
         kv_cache_config = {
@@ -282,9 +276,12 @@ class TestConfigInfoMetrics:
             "cache_dtype": "auto",
         }
         collector.log_config_info(kv_cache_config=kv_cache_config)
-        assert REGISTRY.get_sample_value("trtllm_kv_cache_config_info",
-                                         {"model_name": "test_model",
-                                          **kv_cache_config}) == 1.0
+        assert (
+            REGISTRY.get_sample_value(
+                "trtllm_kv_cache_config_info", {"model_name": "test_model", **kv_cache_config}
+            )
+            == 1.0
+        )
 
     def test_no_config_no_error(self, collector):
         """No error when all configs are None."""
@@ -292,8 +289,7 @@ class TestConfigInfoMetrics:
 
     def test_partial_config(self, collector):
         """Only model config provided, others None."""
-        collector.log_config_info(
-            model_config={"model": "test", "dtype": "auto"})
+        collector.log_config_info(model_config={"model": "test", "dtype": "auto"})
 
 
 # ---------------------------------------------------------------------------
@@ -316,16 +312,13 @@ SAMPLE_REQUEST_METRICS_FULL = {
 }
 
 
-
-
 class TestRequestSuccessCounter:
     """Test counter_request_success increments with the correct finished_reason label."""
 
     def test_success_counter_incremented(self, collector):
         labels = {"model_name": "test_model", "finished_reason": "end_id"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_counter_value(collector.counter_request_success,
-                                  labels) == 1
+        assert _get_counter_value(collector.counter_request_success, labels) == 1
 
     def test_success_counter_tracks_finish_reason_separately(self, collector):
         """Different finish_reason values must be tracked in separate label series."""
@@ -335,12 +328,20 @@ class TestRequestSuccessCounter:
         }
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
         collector.log_request_metrics_dict(metrics_stop)
-        assert _get_counter_value(
-            collector.counter_request_success,
-            {"model_name": "test_model", "finished_reason": "end_id"}) == 1
-        assert _get_counter_value(
-            collector.counter_request_success,
-            {"model_name": "test_model", "finished_reason": "stop_words"}) == 1
+        assert (
+            _get_counter_value(
+                collector.counter_request_success,
+                {"model_name": "test_model", "finished_reason": "end_id"},
+            )
+            == 1
+        )
+        assert (
+            _get_counter_value(
+                collector.counter_request_success,
+                {"model_name": "test_model", "finished_reason": "stop_words"},
+            )
+            == 1
+        )
 
 
 class TestPerRequestTokenCounters:
@@ -349,24 +350,20 @@ class TestPerRequestTokenCounters:
     def test_prompt_tokens_incremented(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_counter_value(collector.counter_prompt_tokens,
-                                  labels) == 128
+        assert _get_counter_value(collector.counter_prompt_tokens, labels) == 128
 
     def test_generation_tokens_incremented(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_counter_value(collector.counter_generation_tokens,
-                                  labels) == 50
+        assert _get_counter_value(collector.counter_generation_tokens, labels) == 50
 
     def test_token_counters_accumulate(self, collector):
         """Counters should sum across multiple requests."""
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_counter_value(collector.counter_prompt_tokens,
-                                  labels) == 256
-        assert _get_counter_value(collector.counter_generation_tokens,
-                                  labels) == 100
+        assert _get_counter_value(collector.counter_prompt_tokens, labels) == 256
+        assert _get_counter_value(collector.counter_generation_tokens, labels) == 100
 
     def test_missing_token_counts_no_error(self, collector):
         """No error and no increment when token counts are absent."""
@@ -378,8 +375,7 @@ class TestPerRequestTokenCounters:
         }
         collector.log_request_metrics_dict(metrics_without_tokens)
         assert _get_counter_value(collector.counter_prompt_tokens, labels) == 0
-        assert _get_counter_value(collector.counter_generation_tokens,
-                                  labels) == 0
+        assert _get_counter_value(collector.counter_generation_tokens, labels) == 0
 
     def test_zero_tokens_not_incremented(self, collector):
         """Zero token counts should not increment the counter."""
@@ -391,12 +387,12 @@ class TestPerRequestTokenCounters:
         }
         collector.log_request_metrics_dict(metrics)
         assert _get_counter_value(collector.counter_prompt_tokens, labels) == 0
-        assert _get_counter_value(collector.counter_generation_tokens,
-                                  labels) == 0
+        assert _get_counter_value(collector.counter_generation_tokens, labels) == 0
 
     def test_n_greater_than_1_prompt_tokens_counted_once(self, collector):
-        """For n>1, PROMPT_TOKENS should be counted once (candidate 0 only),
-        while GENERATION_TOKENS accumulates per candidate.
+        """For n>1, PROMPT_TOKENS should be counted once (candidate 0 only).
+
+        GENERATION_TOKENS accumulates per candidate.
 
         This simulates what record_stats in executor/result.py produces:
         candidate 0 emits both PROMPT_TOKENS and GENERATION_TOKENS,
@@ -404,26 +400,32 @@ class TestPerRequestTokenCounters:
         """
         labels = {"model_name": "test_model"}
         # Candidate 0: prompt + generation tokens
-        collector.log_request_metrics_dict({
-            MetricsCollector.labelname_finish_reason: "end_id",
-            MetricNames.PROMPT_TOKENS: 128,
-            MetricNames.GENERATION_TOKENS: 50,
-        })
+        collector.log_request_metrics_dict(
+            {
+                MetricsCollector.labelname_finish_reason: "end_id",
+                MetricNames.PROMPT_TOKENS: 128,
+                MetricNames.GENERATION_TOKENS: 50,
+            }
+        )
         # Candidate 1: only generation tokens (shared prompt not re-counted)
-        collector.log_request_metrics_dict({
-            MetricsCollector.labelname_finish_reason: "end_id",
-            MetricNames.GENERATION_TOKENS: 42,
-        })
+        collector.log_request_metrics_dict(
+            {
+                MetricsCollector.labelname_finish_reason: "end_id",
+                MetricNames.GENERATION_TOKENS: 42,
+            }
+        )
         # Candidate 2: only generation tokens
-        collector.log_request_metrics_dict({
-            MetricsCollector.labelname_finish_reason: "end_id",
-            MetricNames.GENERATION_TOKENS: 38,
-        })
+        collector.log_request_metrics_dict(
+            {
+                MetricsCollector.labelname_finish_reason: "end_id",
+                MetricNames.GENERATION_TOKENS: 38,
+            }
+        )
         # Prompt counted once, generation tokens summed across all candidates
-        assert _get_counter_value(collector.counter_prompt_tokens,
-                                  labels) == 128
-        assert _get_counter_value(collector.counter_generation_tokens,
-                                  labels) == 130  # 50 + 42 + 38
+        assert _get_counter_value(collector.counter_prompt_tokens, labels) == 128
+        assert (
+            _get_counter_value(collector.counter_generation_tokens, labels) == 130
+        )  # 50 + 42 + 38
 
 
 def _get_histogram_sum(histogram, labels):
@@ -452,50 +454,50 @@ class TestPerRequestPhaseHistograms:
     def test_prefill_time_observed(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_histogram_count(collector.histogram_prefill_time_request,
-                                    labels) == 1
-        assert _get_histogram_sum(collector.histogram_prefill_time_request,
-                                  labels) == pytest.approx(0.2)
+        assert _get_histogram_count(collector.histogram_prefill_time_request, labels) == 1
+        assert _get_histogram_sum(
+            collector.histogram_prefill_time_request, labels
+        ) == pytest.approx(0.2)
 
     def test_decode_time_observed(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_histogram_count(collector.histogram_decode_time_request,
-                                    labels) == 1
-        assert _get_histogram_sum(collector.histogram_decode_time_request,
-                                  labels) == pytest.approx(2.2)
+        assert _get_histogram_count(collector.histogram_decode_time_request, labels) == 1
+        assert _get_histogram_sum(collector.histogram_decode_time_request, labels) == pytest.approx(
+            2.2
+        )
 
     def test_inference_time_observed(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_histogram_count(collector.histogram_inference_time_request,
-                                    labels) == 1
-        assert _get_histogram_sum(collector.histogram_inference_time_request,
-                                  labels) == pytest.approx(2.4)
+        assert _get_histogram_count(collector.histogram_inference_time_request, labels) == 1
+        assert _get_histogram_sum(
+            collector.histogram_inference_time_request, labels
+        ) == pytest.approx(2.4)
 
     def test_e2e_time_observed(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_histogram_count(collector.histogram_e2e_time_request,
-                                    labels) == 1
-        assert _get_histogram_sum(collector.histogram_e2e_time_request,
-                                  labels) == pytest.approx(2.5)
+        assert _get_histogram_count(collector.histogram_e2e_time_request, labels) == 1
+        assert _get_histogram_sum(collector.histogram_e2e_time_request, labels) == pytest.approx(
+            2.5
+        )
 
     def test_ttft_observed(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_histogram_count(collector.histogram_time_to_first_token,
-                                    labels) == 1
-        assert _get_histogram_sum(collector.histogram_time_to_first_token,
-                                  labels) == pytest.approx(0.3)
+        assert _get_histogram_count(collector.histogram_time_to_first_token, labels) == 1
+        assert _get_histogram_sum(collector.histogram_time_to_first_token, labels) == pytest.approx(
+            0.3
+        )
 
     def test_tpot_observed(self, collector):
         labels = {"model_name": "test_model"}
         collector.log_request_metrics_dict(SAMPLE_REQUEST_METRICS_FULL)
-        assert _get_histogram_count(collector.histogram_time_per_output_token,
-                                    labels) == 1
-        assert _get_histogram_sum(collector.histogram_time_per_output_token,
-                                  labels) == pytest.approx(0.05)
+        assert _get_histogram_count(collector.histogram_time_per_output_token, labels) == 1
+        assert _get_histogram_sum(
+            collector.histogram_time_per_output_token, labels
+        ) == pytest.approx(0.05)
 
     def test_missing_phase_times_no_observation(self, collector):
         """No histogram observations when phase times are absent."""
@@ -506,12 +508,9 @@ class TestPerRequestPhaseHistograms:
             MetricNames.TTFT: 0.1,
         }
         collector.log_request_metrics_dict(metrics)
-        assert _get_histogram_count(collector.histogram_prefill_time_request,
-                                    labels) == 0
-        assert _get_histogram_count(collector.histogram_decode_time_request,
-                                    labels) == 0
-        assert _get_histogram_count(collector.histogram_inference_time_request,
-                                    labels) == 0
+        assert _get_histogram_count(collector.histogram_prefill_time_request, labels) == 0
+        assert _get_histogram_count(collector.histogram_decode_time_request, labels) == 0
+        assert _get_histogram_count(collector.histogram_inference_time_request, labels) == 0
 
     def test_no_observation_without_finish_reason(self, collector):
         """Phase histograms must not be updated for in-progress requests."""
@@ -525,8 +524,7 @@ class TestPerRequestPhaseHistograms:
             MetricNames.GENERATION_TOKENS: 5,
         }
         collector.log_request_metrics_dict(metrics_no_finish)
-        assert _get_histogram_count(collector.histogram_prefill_time_request,
-                                    labels) == 0
+        assert _get_histogram_count(collector.histogram_prefill_time_request, labels) == 0
         assert _get_counter_value(collector.counter_prompt_tokens, labels) == 0
 
     def test_queue_time_zero_is_recorded_to_prometheus(self, collector):
@@ -539,10 +537,10 @@ class TestPerRequestPhaseHistograms:
             MetricNames.REQUEST_QUEUE_TIME: 0.0,  # immediate scheduling
         }
         collector.log_request_metrics_dict(metrics)
-        assert _get_histogram_count(collector.histogram_queue_time_request,
-                                    labels) == 1
-        assert _get_histogram_sum(collector.histogram_queue_time_request,
-                                  labels) == pytest.approx(0.0)
+        assert _get_histogram_count(collector.histogram_queue_time_request, labels) == 1
+        assert _get_histogram_sum(collector.histogram_queue_time_request, labels) == pytest.approx(
+            0.0
+        )
 
 
 # Shared timing fixture used across TestProcessReqPerfMetrics tests.
@@ -593,8 +591,10 @@ class TestProcessReqPerfMetrics:
         assert MetricNames.TPOT not in stat
 
     def test_per_candidate_metrics_computed_independently(self):
-        """Each candidate gets its own GENERATION_TOKENS and TPOT, even when
-        candidates have different output lengths."""
+        """Each candidate gets its own GENERATION_TOKENS and TPOT.
+
+        Even when candidates have different output lengths.
+        """
         stat_a = process_req_perf_metrics(_FULL_TIMESTAMPS, output_length=50)
         stat_b = process_req_perf_metrics(_FULL_TIMESTAMPS, output_length=30)
         assert stat_a[MetricNames.GENERATION_TOKENS] == 50
@@ -618,8 +618,10 @@ class TestProcessReqPerfMetrics:
         assert MetricNames.E2E not in stat
 
     def test_clock_skew_negative_phase_time_is_dropped(self):
-        """Negative phase durations (clock skew) must not appear in output;
-        non-negative metrics must still be present."""
+        """Negative phase durations (clock skew) must not appear in output.
+
+        Non-negative metrics must still be present.
+        """
         skewed = {
             RequestEventTiming.ARRIVAL_TIME: 1000.0,
             RequestEventTiming.FIRST_SCHEDULED_TIME: 1000.05,
@@ -639,8 +641,11 @@ class TestProcessReqPerfMetrics:
         assert stat[MetricNames.DECODE_TIME] == pytest.approx(2.48)
 
     def test_negative_queue_time_is_dropped(self):
-        """Negative REQUEST_QUEUE_TIME (arrival after first_scheduled due to clock skew)
-        must not appear in the output."""
+        """Negative REQUEST_QUEUE_TIME due to clock skew must not appear.
+
+        When arrival is after first_scheduled due to clock skew,
+        the output should not contain the metric.
+        """
         skewed = {
             RequestEventTiming.ARRIVAL_TIME: 1000.10,  # arrives after scheduled
             RequestEventTiming.FIRST_SCHEDULED_TIME: 1000.05,
