@@ -1,5 +1,5 @@
-from .collector import *
-from .enums import *
+from .collector import MetricsCollector
+from .enums import MetricNames, RequestEventTiming
 from .perf_utils import process_req_perf_metrics
 
 __all__ = [

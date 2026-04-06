@@ -22,8 +22,7 @@ from .enums import MetricNames
 
 # Adapted from https://github.com/vllm-project/vllm/blob/v0.10.0rc1/vllm/engine/metrics.py#L30
 class MetricsCollector:
-    """
-    Collects and logs metrics from TensorRT-LLM engine stats and request performance metrics to Prometheus.
+    """Collects and logs metrics from TensorRT-LLM engine stats to Prometheus.
 
     Used by OpenAIServer in tensorrt_llm/serve/openai_server.py.
 
@@ -328,8 +327,7 @@ class MetricsCollector:
             parallel_config: Optional[Dict[str, str]] = None,
             speculative_config: Optional[Dict[str, str]] = None,
             kv_cache_config: Optional[Dict[str, str]] = None) -> None:
-        """
-        Log static configuration as Prometheus info-style gauges (set to 1 with config labels).
+        """Log static configuration as Prometheus info-style gauges (set to 1 with config labels).
 
         Should be called once at startup. Each config dict's keys become Prometheus labels.
         Follows the same pattern as vLLM/SGLang config info metrics.
@@ -390,8 +388,7 @@ class MetricsCollector:
         gauge.labels(**self.labels).set(data)
 
     def log_request_metrics_dict(self, metrics_dict: dict[str, float]) -> None:
-        """
-        Log per-request metrics from TRTLLM engine responses.
+        """Log per-request metrics from TRTLLM engine responses.
 
         This method updates Prometheus metrics including:
         - counter_request_success
@@ -464,8 +461,7 @@ class MetricsCollector:
             self.last_log_time = time.time()
 
     def log_iteration_stats(self, iteration_stats: dict) -> None:
-        """
-        Log iteration-level statistics from TRTLLM engine.
+        """Log iteration-level statistics from TRTLLM engine.
 
         Updates Prometheus gauges/counters for queue load, memory usage, batch sizes,
         KV cache blocks, inflight batching, and speculative decoding stats.
