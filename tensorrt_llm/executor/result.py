@@ -567,7 +567,7 @@ class GenerationResultBase:
         Args:
             output (CompletionOutput): The output of the generation result.
             stats (Optional[dict[str, float]]): The stats of the generation result. Defaults to None.
-            sequence_index (int): Index of this candidate (0 for the first / only sequence).
+            sequence_index (int): Index of this candidate (0 for the first / only sequence). Defaults to 0.
         """
         if not stats:
             return
