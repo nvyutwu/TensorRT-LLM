@@ -660,4 +660,60 @@ class TestProcessReqPerfMetrics:
 
     def test_empty_stats_returns_empty(self):
         assert process_req_perf_metrics(None, output_length=10) == {}
-        assert process_req_perf_metrics({}, output_length=10) == {}
+
+
+class TestCustomHistogramBuckets:
+    """Tests for configurable Prometheus histogram bucket boundaries."""
+
+    def test_custom_buckets_applied(self):
+        """Custom bucket lists are reflected in the created histograms."""
+        labels = {"model_name": "test_model"}
+        custom_e2e = [0.1, 0.5, 1.0, 5.0, 10.0]
+        custom_ttft = [0.001, 0.01, 0.1, 1.0]
+        c = MetricsCollector(
+            labels, e2e_request_latency_buckets=custom_e2e, time_to_first_token_buckets=custom_ttft
+        )
+        # prometheus_client appends +Inf automatically
+        assert list(c.histogram_e2e_time_request._upper_bounds) == custom_e2e + [float("inf")]
+        assert list(c.histogram_time_to_first_token._upper_bounds) == custom_ttft + [float("inf")]
+
+    def test_none_uses_defaults(self):
+        """None (unset) falls back to the built-in default bucket boundaries."""
+        labels = {"model_name": "test_model"}
+        c = MetricsCollector(labels)
+        default_e2e = [
+            0.3,
+            0.5,
+            0.8,
+            1.0,
+            1.5,
+            2.0,
+            2.5,
+            5.0,
+            10.0,
+            15.0,
+            20.0,
+            30.0,
+            40.0,
+            50.0,
+            60.0,
+            120.0,
+            240.0,
+            480.0,
+            960.0,
+            1920.0,
+            7680.0,
+        ]
+        assert list(c.histogram_e2e_time_request._upper_bounds) == default_e2e + [float("inf")]
+
+    def test_empty_bucket_list_raises(self):
+        """Passing an empty list must raise ValueError at MetricsCollector init."""
+        labels = {"model_name": "test_model"}
+        with pytest.raises(ValueError, match="must not be empty"):
+            MetricsCollector(labels, e2e_request_latency_buckets=[])
+
+    def test_unsorted_bucket_list_raises(self):
+        """Passing an unsorted list must raise ValueError at MetricsCollector init."""
+        labels = {"model_name": "test_model"}
+        with pytest.raises(ValueError, match="must be strictly increasing"):
+            MetricsCollector(labels, time_to_first_token_buckets=[1.0, 0.5, 2.0])

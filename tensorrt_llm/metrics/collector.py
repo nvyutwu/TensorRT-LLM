@@ -93,6 +93,23 @@ class MetricsCollector:
         request_inference_time_buckets: Optional[List[float]] = None,
     ) -> None:
         from prometheus_client import Counter, Gauge, Histogram
+        _bucket_params = {
+            "e2e_request_latency_buckets": e2e_request_latency_buckets,
+            "time_to_first_token_buckets": time_to_first_token_buckets,
+            "time_per_output_token_buckets": time_per_output_token_buckets,
+            "request_queue_time_buckets": request_queue_time_buckets,
+            "request_prefill_time_buckets": request_prefill_time_buckets,
+            "request_decode_time_buckets": request_decode_time_buckets,
+            "request_inference_time_buckets": request_inference_time_buckets,
+        }
+        for name, buckets in _bucket_params.items():
+            if buckets is None:
+                continue
+            if len(buckets) == 0:
+                raise ValueError(f"{name} must not be empty when provided.")
+            if buckets != sorted(buckets):
+                raise ValueError(
+                    f"{name} must be strictly increasing, got {buckets}.")
         self.last_log_time = time.time()
         self.labels = labels
         self.metric_prefix = "trtllm_"

@@ -369,26 +369,21 @@ class OpenAIServer:
 
         if self.generator.args.return_perf_metrics:
             set_prometheus_multiproc_dir()
+            args = self.generator.args
             self.metrics_collector = MetricsCollector(
                 {
                     "model_name": self.model,
-                    "engine_type": self.generator.args.backend or "unknown"
+                    "engine_type": args.backend or "unknown"
                 },
-                e2e_request_latency_buckets=getattr(
-                    self.generator.args, "e2e_request_latency_buckets", None),
-                time_to_first_token_buckets=getattr(
-                    self.generator.args, "time_to_first_token_buckets", None),
-                time_per_output_token_buckets=getattr(
-                    self.generator.args, "time_per_output_token_buckets", None),
-                request_queue_time_buckets=getattr(
-                    self.generator.args, "request_queue_time_buckets", None),
-                request_prefill_time_buckets=getattr(
-                    self.generator.args, "request_prefill_time_buckets", None),
-                request_decode_time_buckets=getattr(
-                    self.generator.args, "request_decode_time_buckets", None),
-                request_inference_time_buckets=getattr(
-                    self.generator.args, "request_inference_time_buckets",
-                    None),
+                e2e_request_latency_buckets=args.e2e_request_latency_buckets,
+                time_to_first_token_buckets=args.time_to_first_token_buckets,
+                time_per_output_token_buckets=args.
+                time_per_output_token_buckets,
+                request_queue_time_buckets=args.request_queue_time_buckets,
+                request_prefill_time_buckets=args.request_prefill_time_buckets,
+                request_decode_time_buckets=args.request_decode_time_buckets,
+                request_inference_time_buckets=args.
+                request_inference_time_buckets,
             )
             self._log_config_info_metrics()
             max_perf_metrics = self.generator.args.perf_metrics_max_requests
