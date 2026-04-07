@@ -2761,6 +2761,55 @@ class BaseLlmArgs(StrictBaseModel):
         "The maximum number of requests for perf metrics. Must also set return_perf_metrics to true to get perf metrics.",
         status="prototype")
 
+    e2e_request_latency_buckets: Optional[List[float]] = Field(
+        default=None,
+        description=
+        "Custom histogram bucket boundaries (in seconds) for trtllm_e2e_request_latency_seconds. "
+        "Defaults to built-in values when unset.",
+        status="prototype")
+
+    time_to_first_token_buckets: Optional[List[float]] = Field(
+        default=None,
+        description=
+        "Custom histogram bucket boundaries (in seconds) for trtllm_time_to_first_token_seconds. "
+        "Defaults to built-in values when unset.",
+        status="prototype")
+
+    time_per_output_token_buckets: Optional[List[float]] = Field(
+        default=None,
+        description=
+        "Custom histogram bucket boundaries (in seconds) for trtllm_time_per_output_token_seconds. "
+        "Defaults to built-in values when unset.",
+        status="prototype")
+
+    request_queue_time_buckets: Optional[List[float]] = Field(
+        default=None,
+        description=
+        "Custom histogram bucket boundaries (in seconds) for trtllm_request_queue_time_seconds. "
+        "Defaults to built-in values when unset.",
+        status="prototype")
+
+    request_prefill_time_buckets: Optional[List[float]] = Field(
+        default=None,
+        description=
+        "Custom histogram bucket boundaries (in seconds) for trtllm_request_prefill_time_seconds. "
+        "Defaults to built-in values when unset.",
+        status="prototype")
+
+    request_decode_time_buckets: Optional[List[float]] = Field(
+        default=None,
+        description=
+        "Custom histogram bucket boundaries (in seconds) for trtllm_request_decode_time_seconds. "
+        "Defaults to built-in values when unset.",
+        status="prototype")
+
+    request_inference_time_buckets: Optional[List[float]] = Field(
+        default=None,
+        description=
+        "Custom histogram bucket boundaries (in seconds) for trtllm_request_inference_time_seconds. "
+        "Defaults to built-in values when unset.",
+        status="prototype")
+
     enable_energy_metrics: bool = Field(
         default=False,
         description=

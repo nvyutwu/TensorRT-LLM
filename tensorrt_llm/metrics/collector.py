@@ -15,7 +15,7 @@
 """Utilities for Prometheus Metrics Collection."""
 
 import time
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from .enums import MetricNames
 
@@ -81,7 +81,17 @@ class MetricsCollector:
     """
     labelname_finish_reason = "finished_reason"
 
-    def __init__(self, labels: Dict[str, str]) -> None:
+    def __init__(
+        self,
+        labels: Dict[str, str],
+        e2e_request_latency_buckets: Optional[List[float]] = None,
+        time_to_first_token_buckets: Optional[List[float]] = None,
+        time_per_output_token_buckets: Optional[List[float]] = None,
+        request_queue_time_buckets: Optional[List[float]] = None,
+        request_prefill_time_buckets: Optional[List[float]] = None,
+        request_decode_time_buckets: Optional[List[float]] = None,
+        request_inference_time_buckets: Optional[List[float]] = None,
+    ) -> None:
         from prometheus_client import Counter, Gauge, Histogram
         self.last_log_time = time.time()
         self.labels = labels
@@ -103,7 +113,7 @@ class MetricsCollector:
         self.histogram_e2e_time_request = Histogram(
             name=self.metric_prefix + "e2e_request_latency_seconds",
             documentation="Histogram of end to end request latency in seconds.",
-            buckets=[
+            buckets=e2e_request_latency_buckets or [
                 0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 2.5, 5.0, 10.0, 15.0, 20.0, 30.0,
                 40.0, 50.0, 60.0, 120.0, 240.0, 480.0, 960.0, 1920.0, 7680.0
             ],
@@ -112,7 +122,7 @@ class MetricsCollector:
         self.histogram_time_to_first_token = Histogram(
             name=self.metric_prefix + "time_to_first_token_seconds",
             documentation="Histogram of time to first token in seconds.",
-            buckets=[
+            buckets=time_to_first_token_buckets or [
                 0.001, 0.005, 0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.25, 0.5,
                 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 20.0, 40.0, 80.0, 160.0, 640.0,
                 2560.0
@@ -122,7 +132,7 @@ class MetricsCollector:
         self.histogram_time_per_output_token = Histogram(
             name=self.metric_prefix + "time_per_output_token_seconds",
             documentation="Histogram of time per output token in seconds.",
-            buckets=[
+            buckets=time_per_output_token_buckets or [
                 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75,
                 1.0, 2.5, 5.0, 7.5, 10.0, 20.0, 40.0, 80.0
             ],
@@ -132,30 +142,21 @@ class MetricsCollector:
             name=self.metric_prefix + "request_queue_time_seconds",
             documentation=
             "Histogram of time spent in WAITING phase for request.",
-            buckets=[
+            buckets=request_queue_time_buckets or [
                 0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 2.5, 5.0, 10.0, 15.0, 20.0, 30.0,
                 40.0, 50.0, 60.0, 120.0, 240.0, 480.0, 960.0, 1920.0, 7680.0
             ],
             labelnames=self.labels.keys())
 
-        # Prefill duration is typically in the 1 ms–10 s range; use fine-
-        # grained sub-second buckets to capture that distribution accurately.
-        _prefill_buckets = [
-            0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
-            10.0, 20.0, 40.0, 80.0, 160.0, 640.0, 2560.0
-        ]
-        # Decode and inference durations span seconds to minutes; reuse the
-        # same coarse buckets as e2e_request_latency_seconds.
-        _decode_inference_buckets = [
-            0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 2.5, 5.0, 10.0, 15.0, 20.0, 30.0,
-            40.0, 50.0, 60.0, 120.0, 240.0, 480.0, 960.0, 1920.0, 7680.0
-        ]
         self.histogram_prefill_time_request = Histogram(
             name=self.metric_prefix + "request_prefill_time_seconds",
             documentation=
             "Histogram of prefill (context) phase duration in seconds "
             "(first_token_time - first_scheduled_time).",
-            buckets=_prefill_buckets,
+            buckets=request_prefill_time_buckets or [
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+                10.0, 20.0, 40.0, 80.0, 160.0, 640.0, 2560.0
+            ],
             labelnames=self.labels.keys())
 
         self.histogram_decode_time_request = Histogram(
@@ -163,14 +164,20 @@ class MetricsCollector:
             documentation=
             "Histogram of decode (generation) phase duration in seconds "
             "(last_token_time - first_token_time).",
-            buckets=_decode_inference_buckets,
+            buckets=request_decode_time_buckets or [
+                0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 2.5, 5.0, 10.0, 15.0, 20.0, 30.0,
+                40.0, 50.0, 60.0, 120.0, 240.0, 480.0, 960.0, 1920.0, 7680.0
+            ],
             labelnames=self.labels.keys())
 
         self.histogram_inference_time_request = Histogram(
             name=self.metric_prefix + "request_inference_time_seconds",
             documentation="Histogram of total inference duration in seconds "
             "(last_token_time - first_scheduled_time).",
-            buckets=_decode_inference_buckets,
+            buckets=request_inference_time_buckets or [
+                0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 2.5, 5.0, 10.0, 15.0, 20.0, 30.0,
+                40.0, 50.0, 60.0, 120.0, 240.0, 480.0, 960.0, 1920.0, 7680.0
+            ],
             labelnames=self.labels.keys())
 
         self.counter_prompt_tokens = Counter(
