@@ -249,7 +249,9 @@ class OpenAIServer:
             # VisualGen has no args
             if not isinstance(self.generator, VisualGen):
                 # Start energy monitoring if enabled
-                if getattr(self.generator.args, "enable_energy_metrics", False):
+                pmc = getattr(self.generator.args, "prometheus_metrics_config",
+                              None)
+                if pmc is not None and pmc.enable_energy_metrics:
                     try:
                         world_size = self.generator.args.parallel_config.world_size
                         self.energy_monitor = EnergyMonitor(world_size)
@@ -370,20 +372,26 @@ class OpenAIServer:
         if self.generator.args.return_perf_metrics:
             set_prometheus_multiproc_dir()
             args = self.generator.args
+            pmc = getattr(args, "prometheus_metrics_config", None)
             self.metrics_collector = MetricsCollector(
                 {
                     "model_name": self.model,
                     "engine_type": args.backend or "unknown"
                 },
-                e2e_request_latency_buckets=args.e2e_request_latency_buckets,
-                time_to_first_token_buckets=args.time_to_first_token_buckets,
-                time_per_output_token_buckets=args.
-                time_per_output_token_buckets,
-                request_queue_time_buckets=args.request_queue_time_buckets,
-                request_prefill_time_buckets=args.request_prefill_time_buckets,
-                request_decode_time_buckets=args.request_decode_time_buckets,
-                request_inference_time_buckets=args.
-                request_inference_time_buckets,
+                e2e_request_latency_buckets=(pmc.e2e_request_latency_buckets
+                                             if pmc else None),
+                time_to_first_token_buckets=(pmc.time_to_first_token_buckets
+                                             if pmc else None),
+                time_per_output_token_buckets=(pmc.time_per_output_token_buckets
+                                               if pmc else None),
+                request_queue_time_buckets=(pmc.request_queue_time_buckets
+                                            if pmc else None),
+                request_prefill_time_buckets=(pmc.request_prefill_time_buckets
+                                              if pmc else None),
+                request_decode_time_buckets=(pmc.request_decode_time_buckets
+                                             if pmc else None),
+                request_inference_time_buckets=(
+                    pmc.request_inference_time_buckets if pmc else None),
             )
             self._log_config_info_metrics()
             max_perf_metrics = self.generator.args.perf_metrics_max_requests

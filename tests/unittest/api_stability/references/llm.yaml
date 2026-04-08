@@ -159,37 +159,9 @@ methods:
         annotation: int
         default: 0
         status: prototype
-      e2e_request_latency_buckets:
-        annotation: Optional[List[float]]
+      prometheus_metrics_config:
+        annotation: Optional[tensorrt_llm.llmapi.llm_args.PrometheusMetricsConfig]
         default: null
-        status: prototype
-      time_to_first_token_buckets:
-        annotation: Optional[List[float]]
-        default: null
-        status: prototype
-      time_per_output_token_buckets:
-        annotation: Optional[List[float]]
-        default: null
-        status: prototype
-      request_queue_time_buckets:
-        annotation: Optional[List[float]]
-        default: null
-        status: prototype
-      request_prefill_time_buckets:
-        annotation: Optional[List[float]]
-        default: null
-        status: prototype
-      request_decode_time_buckets:
-        annotation: Optional[List[float]]
-        default: null
-        status: prototype
-      request_inference_time_buckets:
-        annotation: Optional[List[float]]
-        default: null
-        status: prototype
-      enable_energy_metrics:
-        annotation: bool
-        default: False
         status: prototype
       torch_compile_config:
         annotation: Optional[tensorrt_llm.llmapi.llm_args.TorchCompileConfig]
