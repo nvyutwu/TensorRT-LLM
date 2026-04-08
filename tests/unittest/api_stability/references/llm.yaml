@@ -163,6 +163,10 @@ methods:
         annotation: Optional[tensorrt_llm.llmapi.llm_args.PrometheusMetricsConfig]
         default: null
         status: prototype
+      enable_energy_metrics:
+        annotation: bool
+        default: False
+        status: prototype
       torch_compile_config:
         annotation: Optional[tensorrt_llm.llmapi.llm_args.TorchCompileConfig]
         default: null

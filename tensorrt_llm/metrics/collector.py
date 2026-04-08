@@ -107,7 +107,7 @@ class MetricsCollector:
                 continue
             if len(buckets) == 0:
                 raise ValueError(f"{name} must not be empty when provided.")
-            if buckets != sorted(buckets):
+            if any(a >= b for a, b in zip(buckets, buckets[1:])):
                 raise ValueError(
                     f"{name} must be strictly increasing, got {buckets}.")
         self.last_log_time = time.time()

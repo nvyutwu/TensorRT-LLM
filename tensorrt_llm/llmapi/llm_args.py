@@ -1607,7 +1607,7 @@ class PrometheusMetricsConfig(StrictBaseModel):
     Configuration for Prometheus metrics collection.
 
     Groups all Prometheus-related parameters including custom histogram bucket
-    boundaries for latency metrics and GPU energy monitoring.
+    boundaries for latency metrics.
     """
 
     e2e_request_latency_buckets: Optional[List[float]] = Field(
@@ -1659,12 +1659,6 @@ class PrometheusMetricsConfig(StrictBaseModel):
         "Defaults to built-in values when unset.",
         status="prototype")
 
-    enable_energy_metrics: bool = Field(
-        default=False,
-        description=
-        "Enable GPU energy monitoring via NVML. When enabled, the server exposes an /energy_metrics endpoint that reports cumulative GPU energy consumption in joules.",
-        status="prototype")
-
     @field_validator(
         "e2e_request_latency_buckets",
         "time_to_first_token_buckets",
@@ -1683,7 +1677,7 @@ class PrometheusMetricsConfig(StrictBaseModel):
         if len(v) == 0:
             raise ValueError(
                 f"{info.field_name} must not be empty when provided.")
-        if v != sorted(v):
+        if any(a >= b for a, b in zip(v, v[1:])):
             raise ValueError(
                 f"{info.field_name} must be strictly increasing, got {v}.")
         return v
@@ -2851,7 +2845,13 @@ class BaseLlmArgs(StrictBaseModel):
     prometheus_metrics_config: Optional[PrometheusMetricsConfig] = Field(
         default=None,
         description="Configuration for Prometheus metrics collection, including "
-        "custom histogram bucket boundaries and GPU energy monitoring.",
+        "custom histogram bucket boundaries.",
+        status="prototype")
+
+    enable_energy_metrics: bool = Field(
+        default=False,
+        description=
+        "Enable GPU energy monitoring via NVML. When enabled, the server exposes an /energy_metrics endpoint that reports cumulative GPU energy consumption in joules.",
         status="prototype")
 
     orchestrator_type: Optional[Literal["rpc", "ray"]] = Field(

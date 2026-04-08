@@ -717,3 +717,9 @@ class TestCustomHistogramBuckets:
         labels = {"model_name": "test_model"}
         with pytest.raises(ValueError, match="must be strictly increasing"):
             MetricsCollector(labels, time_to_first_token_buckets=[1.0, 0.5, 2.0])
+
+    def test_duplicate_bucket_values_raises(self):
+        """Passing duplicate values must raise ValueError (not strictly increasing)."""
+        labels = {"model_name": "test_model"}
+        with pytest.raises(ValueError, match="must be strictly increasing"):
+            MetricsCollector(labels, e2e_request_latency_buckets=[1.0, 1.0, 2.0])

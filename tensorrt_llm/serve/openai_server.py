@@ -249,9 +249,7 @@ class OpenAIServer:
             # VisualGen has no args
             if not isinstance(self.generator, VisualGen):
                 # Start energy monitoring if enabled
-                pmc = getattr(self.generator.args, "prometheus_metrics_config",
-                              None)
-                if pmc is not None and pmc.enable_energy_metrics:
+                if getattr(self.generator.args, "enable_energy_metrics", False):
                     try:
                         world_size = self.generator.args.parallel_config.world_size
                         self.energy_monitor = EnergyMonitor(world_size)
