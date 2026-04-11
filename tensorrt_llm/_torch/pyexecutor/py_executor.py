@@ -516,6 +516,11 @@ class PyExecutor:
 
         self.stats_lock = threading.Lock()
         self.stats = []
+        self._latest_kv_iter_stats = None
+        self._last_kv_iter_stats_fetch_iter = None
+        self._kv_iter_stats_interval = getattr(
+            getattr(self.llm_args, 'kv_cache_config', None),
+            'iteration_stats_interval', 1)
         self.gather_all_responses = False
 
         self.kv_cache_transceiver = kv_cache_transceiver
@@ -1094,6 +1099,17 @@ class PyExecutor:
             kv_stats_to_save.cache_hit_rate = kv_stats.cache_hit_rate
             stats.kv_cache_stats = kv_stats_to_save
 
+            # Collect per-iteration stats (with deltas) at configured interval.
+            # Between calls, C++ deltas accumulate so the reported values cover multiple iterations.
+            # Guard: only fetch once per iter_counter to avoid draining deltas in PP multi-batch.
+            if (self.iter_counter % self._kv_iter_stats_interval == 0 and
+                    self._last_kv_iter_stats_fetch_iter != self.iter_counter):
+                self._latest_kv_iter_stats = kv_cache_manager.get_iteration_stats(
+                )
+                self._last_kv_iter_stats_fetch_iter = self.iter_counter
+            else:
+                self._latest_kv_iter_stats = None
+
         stats.inflight_batching_stats.num_context_requests = scheduled_batch.num_context_requests
         stats.inflight_batching_stats.num_gen_requests = scheduled_batch.num_generation_requests
         stats.inflight_batching_stats.num_scheduled_requests = stats.inflight_batching_stats.num_context_requests + stats.inflight_batching_stats.num_gen_requests
@@ -1161,7 +1177,7 @@ class PyExecutor:
         with self.stats_lock:
             if len(self.stats) > self.max_stats_len:
                 self.stats.pop(0)
-            self.stats.append((stats, req_stats))
+            self.stats.append((stats, req_stats, self._latest_kv_iter_stats))
 
     def _process_iter_stats(
         self,
@@ -1790,7 +1806,7 @@ class PyExecutor:
                 new_requests += iter_requests
                 self.hang_detector.checkpoint()
                 if self.num_fetch_requests < fill_target:
-                    time.sleep(1)
+                    time.sleep(0.1)
 
         iter_stats = None
         if self.enable_iter_perf_stats:
@@ -2199,10 +2215,10 @@ class PyExecutor:
                         else:
                             if self.dist.rank == 0:
                                 logger.info(
-                                    f"sleep 10 seconds, num_fetched_requests: {self.num_fetch_requests}, "
+                                    f"sleep 0.1 seconds, num_fetched_requests: {self.num_fetch_requests}, "
                                     f"total_gen_count: {total_gen_count}, "
                                     f"scheduled_gen_batch: {local_gen_count}")
-                            time.sleep(10)
+                            time.sleep(0.1)
                             continue
                     else:
                         if scheduled_batch.num_generation_requests < self.benchmark_req_queues_size:
@@ -3530,6 +3546,9 @@ class PyExecutor:
     def _handle_responses(self):
         new_responses = []
         requests_to_terminate = []
+        # Requests terminated by _check_disagg_ctx_cache_transfer_status (DISAGG_CONTEXT_COMPLETE);
+        # included in the return value for stats but not re-terminated here.
+        requests_finished_by_transfer = []
         new_active_requests = []
         logger.debug(
             f'------before _handle_responses, rank = {self.dist.rank}, output = {self.active_requests}'
@@ -3618,11 +3637,18 @@ class PyExecutor:
                 # If partial reuse is enabled, and the KV cache manager is not VSWA, and the PP size is 1,
                 # then we need to terminate the request. TODO: Remove this once disagg support from KVCache reuse
                 # path is fixed.
-                if self.enable_partial_reuse_for_disagg and not self.kv_cache_manager.is_vswa and self.dist.pp_size == 1:
+                force_terminate_for_partial_reuse = (
+                    self.enable_partial_reuse_for_disagg
+                    and not self.kv_cache_manager.is_vswa
+                    and self.dist.pp_size == 1)
+                if request.is_disagg_context_complete_state:
+                    # Already terminated by _check_disagg_ctx_cache_transfer_status;
+                    # track for stats only to avoid double-free (nvbug/5961736).
+                    requests_finished_by_transfer.append(request)
+                elif force_terminate_for_partial_reuse:
                     requests_to_terminate.append(request)
-                else:
-                    if not request.is_disagg_context_transmission_state:
-                        requests_to_terminate.append(request)
+                elif not request.is_disagg_context_transmission_state:
+                    requests_to_terminate.append(request)
             else:
                 new_active_requests.append(request)
 
@@ -3632,7 +3658,7 @@ class PyExecutor:
         self._enqueue_responses(new_responses)
         for request in requests_to_terminate:
             self._terminate_request(request)
-        return requests_to_terminate
+        return requests_to_terminate + requests_finished_by_transfer
 
     def _await_any_response(self,
                             timeout: Optional[float] = None
