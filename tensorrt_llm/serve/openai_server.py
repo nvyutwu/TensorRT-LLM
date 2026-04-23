@@ -780,11 +780,22 @@ class OpenAIServer:
                 aliases.append(n)
         return primary, aliases
 
-    def _resolve_model_name(self, requested: Optional[str]) -> str:
-        """Return the requested model name if it is a known alias, else the primary name."""
-        if requested and requested in self.served_model_names:
-            return requested
-        return self.model
+    def _is_model_supported(self, model_name: Optional[str]) -> bool:
+        """Return True if ``model_name`` is unset or matches a registered name."""
+        if not model_name:
+            return True
+        return model_name in self.served_model_names
+
+    def _check_model(self, request: Any) -> Optional[Response]:
+        """Return a 404 Response if ``request.model`` is not a registered name, else None."""
+        model_name = getattr(request, "model", None)
+        if self._is_model_supported(model_name):
+            return None
+        return self.create_error_response(
+            message=f"The model `{model_name}` does not exist.",
+            err_type="NotFoundError",
+            status_code=HTTPStatus.NOT_FOUND,
+        )
 
     async def get_model(self) -> JSONResponse:
         model_list = ModelList(
@@ -1021,6 +1032,9 @@ class OpenAIServer:
 
     async def openai_chat(self, request: ChatCompletionRequest,
                           raw_request: Request) -> Response:
+        error_check_ret = self._check_model(request)
+        if error_check_ret is not None:
+            return error_check_ret
 
         def get_role() -> str:
             if request.add_generation_prompt:
@@ -1086,9 +1100,9 @@ class OpenAIServer:
                     if strict_guided is not None:
                         sampling_params.guided_decoding = strict_guided
             postproc_args = ChatPostprocArgs.from_request(request)
-            # Echo the resolved alias (or fall back to primary) so streaming
-            # and non-streaming responses return the same model name.
-            postproc_args.model = self._resolve_model_name(request.model)
+            # Always report the primary name in responses; streaming inherits
+            # this via postproc_args.
+            postproc_args.model = self.model
             disaggregated_params = to_llm_disaggregated_params(
                 request.disaggregated_params)
 
@@ -1188,6 +1202,9 @@ class OpenAIServer:
 
     async def openai_mm_encoder(self, request: ChatCompletionRequest,
                                 raw_request: Request) -> Response:
+        error_check_ret = self._check_model(request)
+        if error_check_ret is not None:
+            return error_check_ret
 
         async def create_mm_embedding_response(promise: RequestOutput):
             await promise.aresult()
@@ -1212,7 +1229,7 @@ class OpenAIServer:
                 int(h["tensor_size"][0]) for h in mm_embedding_handles)
             return ChatCompletionResponse(
                 id=str(promise.request_id),
-                model=self._resolve_model_name(request.model),
+                model=self.model,
                 choices=[
                     ChatCompletionResponseChoice(
                         index=0,
@@ -1285,6 +1302,9 @@ class OpenAIServer:
 
     async def openai_completion(self, request: CompletionRequest,
                                 raw_request: Request) -> Response:
+        error_check_ret = self._check_model(request)
+        if error_check_ret is not None:
+            return error_check_ret
 
         async def completion_response(
                 promise: RequestOutput,
@@ -1325,7 +1345,7 @@ class OpenAIServer:
                     cached_tokens=num_cached_tokens, ),
             )
             merged_rsp = CompletionResponse(
-                model=self._resolve_model_name(request.model),
+                model=self.model,
                 choices=all_choices,
                 usage=usage_info,
                 prompt_token_ids=all_prompt_token_ids,
@@ -1410,10 +1430,9 @@ class OpenAIServer:
                 sampling_params.return_perf_metrics = True
             disaggregated_params = to_llm_disaggregated_params(
                 request.disaggregated_params)
-            resolved_model_name = self._resolve_model_name(request.model)
             for idx, prompt in enumerate(prompts):
                 postproc_args = CompletionPostprocArgs.from_request(request)
-                postproc_args.model = resolved_model_name
+                postproc_args.model = self.model
                 postproc_args.prompt_idx = idx
                 if request.echo:
                     postproc_args.prompt = prompt
@@ -1488,6 +1507,9 @@ class OpenAIServer:
         Chat Completion API with harmony format support.
         Supports both streaming and non-streaming modes.
         """
+        error_check_ret = self._check_model(request)
+        if error_check_ret is not None:
+            return error_check_ret
 
         async def create_streaming_generator(promise: RequestOutput,
                                              postproc_params: PostprocParams):
@@ -1547,7 +1569,7 @@ class OpenAIServer:
                              tracing.extract_trace_headers(raw_request.headers))
 
             postproc_args = ChatCompletionPostprocArgs.from_request(request)
-            postproc_args.model = self._resolve_model_name(request.model)
+            postproc_args.model = self.model
             postproc_params = PostprocParams(
                 post_processor=chat_harmony_streaming_post_processor
                 if request.stream else chat_harmony_post_processor,
@@ -1589,6 +1611,9 @@ class OpenAIServer:
 
     async def openai_responses(self, request: ResponsesRequest,
                                raw_request: Request) -> Response:
+        error_check_ret = self._check_model(request)
+        if error_check_ret is not None:
+            return error_check_ret
 
         async def create_response(
                 promise: RequestOutput,
@@ -1602,7 +1627,7 @@ class OpenAIServer:
                     generator=promise,
                     request=request,
                     sampling_params=args.sampling_params,
-                    model_name=self._resolve_model_name(request.model),
+                    model_name=self.model,
                     conversation_store=self.conversation_store,
                     generation_result=None,
                     enable_store=self.enable_store and request.store,
@@ -1671,7 +1696,7 @@ class OpenAIServer:
                 streaming_processor = ResponsesStreamingProcessor(
                     request=request,
                     sampling_params=sampling_params,
-                    model_name=self._resolve_model_name(request.model),
+                    model_name=self.model,
                     conversation_store=self.conversation_store,
                     enable_store=self.enable_store and request.store,
                     use_harmony=self.use_harmony,
@@ -1680,7 +1705,7 @@ class OpenAIServer:
                 )
 
             postproc_args = ResponsesAPIPostprocArgs(
-                model=self._resolve_model_name(request.model),
+                model=self.model,
                 request=request,
                 sampling_params=sampling_params,
                 use_harmony=self.use_harmony,
@@ -2086,7 +2111,7 @@ class OpenAIServer:
             video_job = VideoJob(
                 created_at=int(time.time()),
                 id=video_id,
-                model=self._resolve_model_name(request.model),
+                model=self.model,
                 prompt=request.prompt,
                 status="queued",
                 duration=request.seconds,

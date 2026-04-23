@@ -14,6 +14,10 @@
 # limitations under the License.
 """Unit tests for multi-name / alias handling in OpenAIServer."""
 
+import json
+from http import HTTPStatus
+from types import SimpleNamespace
+
 import pytest
 
 from tensorrt_llm.commands.serve import _resolve_served_model_names
@@ -25,7 +29,8 @@ def test_normalize_single_name():
 
 
 def test_normalize_dedup_preserves_order():
-    primary, aliases = OpenAIServer._normalize_model_names(("primary", "a1", "primary", "a2", "a1"))
+    primary, aliases = OpenAIServer._normalize_model_names(
+        ("primary", "a1", "primary", "a2", "a1"))
     assert primary == "primary"
     assert aliases == ["primary", "a1", "a2"]
 
@@ -33,7 +38,8 @@ def test_normalize_dedup_preserves_order():
 def test_normalize_directory_path_uses_basename(tmp_path):
     model_dir = tmp_path / "ckpt"
     model_dir.mkdir()
-    primary, aliases = OpenAIServer._normalize_model_names([str(model_dir), "alias"])
+    primary, aliases = OpenAIServer._normalize_model_names(
+        [str(model_dir), "alias"])
     assert primary == "ckpt"
     assert aliases == ["ckpt", "alias"]
 
@@ -45,16 +51,39 @@ def _make_server(primary, aliases):
     return server
 
 
-def test_resolve_known_alias_is_echoed_back():
+@pytest.mark.parametrize("name", ["primary", "alias1", "alias2"])
+def test_is_model_supported_known(name):
     server = _make_server("primary", ["primary", "alias1", "alias2"])
-    assert server._resolve_model_name("alias1") == "alias1"
-    assert server._resolve_model_name("primary") == "primary"
+    assert server._is_model_supported(name) is True
 
 
-@pytest.mark.parametrize("requested", [None, "", "not-an-alias"])
-def test_resolve_unknown_falls_back_to_primary(requested):
+@pytest.mark.parametrize("name", [None, ""])
+def test_is_model_supported_empty_is_ok(name):
+    """vLLM-parity: empty/None client-supplied model is treated as valid."""
     server = _make_server("primary", ["primary", "alias1"])
-    assert server._resolve_model_name(requested) == "primary"
+    assert server._is_model_supported(name) is True
+
+
+def test_is_model_supported_unknown():
+    server = _make_server("primary", ["primary", "alias1"])
+    assert server._is_model_supported("not-an-alias") is False
+
+
+def test_check_model_accepts_known_alias():
+    server = _make_server("primary", ["primary", "alias1"])
+    request = SimpleNamespace(model="alias1")
+    assert server._check_model(request) is None
+
+
+def test_check_model_rejects_unknown_with_404():
+    server = _make_server("primary", ["primary", "alias1"])
+    request = SimpleNamespace(model="not-an-alias")
+    response = server._check_model(request)
+    assert response is not None
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    body = json.loads(response.body)
+    assert body["type"] == "NotFoundError"
+    assert "not-an-alias" in body["message"]
 
 
 @pytest.mark.parametrize("flag,expected", [

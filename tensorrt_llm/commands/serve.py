@@ -803,9 +803,10 @@ class ChoiceWithAlias(click.Choice):
     multiple=True,
     default=None,
     help=help_info_with_stability_tag(
-        "The model name(s) used in the API. Can be specified multiple times for aliases. "
-        "The first name is primary; additional names are aliases that the server also accepts. "
-        "If not specified, the model path is used as the model name.",
+        "The model name(s) used in the API. Can be specified multiple times for aliases; "
+        "the server accepts requests addressed to any of them. The first name is primary "
+        "and is returned in the `model` field of responses. If not specified, the model "
+        "path is used.",
         "prototype"))
 @click.option("--extra_visual_gen_options",
               type=str,
