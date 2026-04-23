@@ -20,8 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tensorrt_llm.commands.serve import (_resolve_served_model_names,
-                                          _split_served_model_names)
+from tensorrt_llm.commands.serve import _resolve_served_model_names, _split_served_model_names
 from tensorrt_llm.serve.openai_server import OpenAIServer
 
 
@@ -30,8 +29,7 @@ def test_normalize_single_name():
 
 
 def test_normalize_dedup_preserves_order():
-    primary, aliases = OpenAIServer._normalize_model_names(
-        ("primary", "a1", "primary", "a2", "a1"))
+    primary, aliases = OpenAIServer._normalize_model_names(("primary", "a1", "primary", "a2", "a1"))
     assert primary == "primary"
     assert aliases == ["primary", "a1", "a2"]
 
@@ -40,8 +38,7 @@ def test_normalize_directory_path_uses_basename(tmp_path):
     """Primary resolves to basename, but the original path stays a valid alias."""
     model_dir = tmp_path / "ckpt"
     model_dir.mkdir()
-    primary, aliases = OpenAIServer._normalize_model_names(
-        [str(model_dir), "alias"])
+    primary, aliases = OpenAIServer._normalize_model_names([str(model_dir), "alias"])
     assert primary == "ckpt"
     assert aliases == ["ckpt", str(model_dir), "alias"]
 
@@ -50,8 +47,7 @@ def test_normalize_directory_path_dedups_basename_and_path(tmp_path):
     """User-provided 'ckpt' alias after a dir path dedups to a single basename."""
     model_dir = tmp_path / "ckpt"
     model_dir.mkdir()
-    _, aliases = OpenAIServer._normalize_model_names(
-        [str(model_dir), "ckpt", "alias"])
+    _, aliases = OpenAIServer._normalize_model_names([str(model_dir), "ckpt", "alias"])
     assert aliases == ["ckpt", str(model_dir), "alias"]
 
 
@@ -121,28 +117,34 @@ def test_check_model_rejects_unknown_with_404():
     assert "not-an-alias" in body["message"]
 
 
-@pytest.mark.parametrize("flag,expected", [
-    (None, ["/p/m"]),
-    ((), ["/p/m"]),
-    (("foo", ), ["foo"]),
-    (("foo", "bar"), ["foo", "bar"]),
-    (("foo", "", "bar"), ["foo", "bar"]),
-    (("foo", "bar", "foo"), ["foo", "bar", "foo"]),
-])
+@pytest.mark.parametrize(
+    "flag,expected",
+    [
+        (None, ["/p/m"]),
+        ((), ["/p/m"]),
+        (("foo",), ["foo"]),
+        (("foo", "bar"), ["foo", "bar"]),
+        (("foo", "", "bar"), ["foo", "bar"]),
+        (("foo", "bar", "foo"), ["foo", "bar", "foo"]),
+    ],
+)
 def test_resolve_served_model_names_cli(flag, expected):
     assert _resolve_served_model_names(flag, {"model": "/p/m"}) == expected
 
 
-@pytest.mark.parametrize("raw,expected", [
-    (None, None),
-    ((), ()),
-    (("a", ), ("a", )),
-    (("a", "b", "c"), ("a", "b", "c")),  # repeated flags stay as-is
-    (("a,b,c", ), ("a", "b", "c")),  # comma-separated single flag
-    (("a,b", "c"), ("a", "b", "c")),  # mixed
-    (("a , b , c", ), ("a", "b", "c")),  # whitespace around commas
-    (("a,,b", ), ("a", "b")),  # empty pieces dropped
-    (("", "a"), ("a", )),  # empty flag dropped
-])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (None, None),
+        ((), ()),
+        (("a",), ("a",)),
+        (("a", "b", "c"), ("a", "b", "c")),  # repeated flags stay as-is
+        (("a,b,c",), ("a", "b", "c")),  # comma-separated single flag
+        (("a,b", "c"), ("a", "b", "c")),  # mixed
+        (("a , b , c",), ("a", "b", "c")),  # whitespace around commas
+        (("a,,b",), ("a", "b")),  # empty pieces dropped
+        (("", "a"), ("a",)),  # empty flag dropped
+    ],
+)
 def test_split_served_model_names(raw, expected):
     assert _split_served_model_names(None, None, raw) == expected

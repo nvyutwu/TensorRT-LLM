@@ -286,9 +286,8 @@ def _split_served_model_names(ctx, param, value):
     return tuple(out)
 
 
-def _resolve_served_model_names(
-        served_model_name: Optional[Sequence[str]],
-        llm_args: dict) -> list[str]:
+def _resolve_served_model_names(served_model_name: Optional[Sequence[str]],
+                                llm_args: dict) -> list[str]:
     """Normalize click's ``--served_model_name`` into a non-empty list.
 
     Drops empty strings (click passes ``""`` through for unset flags) and
@@ -344,15 +343,14 @@ def launch_server(
                 f"{backend} is not a known backend, check help for available options.",
                 param_hint="backend")
 
-        server = OpenAIServer(
-            generator=llm,
-            model=served_model_names,
-            tool_parser=tool_parser,
-            server_role=server_role,
-            metadata_server_cfg=metadata_server_cfg,
-            disagg_cluster_config=disagg_cluster_config,
-            multimodal_server_config=multimodal_server_config,
-            chat_template=chat_template)
+        server = OpenAIServer(generator=llm,
+                              model=served_model_names,
+                              tool_parser=tool_parser,
+                              server_role=server_role,
+                              metadata_server_cfg=metadata_server_cfg,
+                              disagg_cluster_config=disagg_cluster_config,
+                              multimodal_server_config=multimodal_server_config,
+                              chat_template=chat_template)
 
         # Optionally disable GC (default: not disabled)
         if os.getenv("TRTLLM_SERVER_DISABLE_GC", "0") == "1":
@@ -827,8 +825,7 @@ class ChoiceWithAlias(click.Choice):
         "values (`--served_model_name a,b,c`); the server accepts requests "
         "addressed to any of them. The first name is primary and is returned "
         "in the `model` field of responses. If not specified, the model path "
-        "is used.",
-        "prototype"))
+        "is used.", "prototype"))
 @click.option("--extra_visual_gen_options",
               type=str,
               default=None,
