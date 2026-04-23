@@ -267,6 +267,25 @@ def get_llm_args(
     return llm_args, llm_args_extra_dict
 
 
+def _split_served_model_names(ctx, param, value):
+    """Flatten comma-separated --served_model_name values.
+
+    Click options can't use argparse-style ``nargs="+"``, so this callback
+    lets users pass comma-separated names in a single flag or repeat the flag.
+    All of these produce the same tuple ("a", "b", "c"):
+
+      --served_model_name a --served_model_name b --served_model_name c
+      --served_model_name a,b,c
+      --served_model_name a,b --served_model_name c
+    """
+    if not value:
+        return value
+    out: list[str] = []
+    for v in value:
+        out.extend(p.strip() for p in v.split(",") if p.strip())
+    return tuple(out)
+
+
 def _resolve_served_model_names(
         served_model_name: Optional[Sequence[str]],
         llm_args: dict) -> list[str]:
@@ -801,12 +820,15 @@ class ChoiceWithAlias(click.Choice):
     "--served_model_name",
     type=str,
     multiple=True,
+    callback=_split_served_model_names,
     default=None,
     help=help_info_with_stability_tag(
-        "The model name(s) used in the API. Can be specified multiple times for aliases; "
-        "the server accepts requests addressed to any of them. The first name is primary "
-        "and is returned in the `model` field of responses. If not specified, the model "
-        "path is used.",
+        "The model name(s) used in the API. Accepts repeated flags "
+        "(`--served_model_name a --served_model_name b`) or comma-separated "
+        "values (`--served_model_name a,b,c`); the server accepts requests "
+        "addressed to any of them. The first name is primary and is returned "
+        "in the `model` field of responses. If not specified, the model path "
+        "is used.",
         "prototype"))
 @click.option("--extra_visual_gen_options",
               type=str,

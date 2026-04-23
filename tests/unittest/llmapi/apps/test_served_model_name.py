@@ -20,7 +20,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from tensorrt_llm.commands.serve import _resolve_served_model_names
+from tensorrt_llm.commands.serve import (_resolve_served_model_names,
+                                          _split_served_model_names)
 from tensorrt_llm.serve.openai_server import OpenAIServer
 
 
@@ -96,3 +97,18 @@ def test_check_model_rejects_unknown_with_404():
 ])
 def test_resolve_served_model_names_cli(flag, expected):
     assert _resolve_served_model_names(flag, {"model": "/p/m"}) == expected
+
+
+@pytest.mark.parametrize("raw,expected", [
+    (None, None),
+    ((), ()),
+    (("a", ), ("a", )),
+    (("a", "b", "c"), ("a", "b", "c")),  # repeated flags stay as-is
+    (("a,b,c", ), ("a", "b", "c")),  # comma-separated single flag
+    (("a,b", "c"), ("a", "b", "c")),  # mixed
+    (("a , b , c", ), ("a", "b", "c")),  # whitespace around commas
+    (("a,,b", ), ("a", "b")),  # empty pieces dropped
+    (("", "a"), ("a", )),  # empty flag dropped
+])
+def test_split_served_model_names(raw, expected):
+    assert _split_served_model_names(None, None, raw) == expected
