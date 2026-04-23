@@ -187,7 +187,7 @@ class OpenAIServer:
     def __init__(
             self,
             generator: Union[LLM, MultimodalEncoder, VisualGen],
-            model: Union[str, Sequence[str]],
+            model: Sequence[str],
             tool_parser: Optional[str],
             server_role: Optional[ServerRole],
             metadata_server_cfg: MetadataServerConfig,
@@ -762,13 +762,12 @@ class OpenAIServer:
 
     @staticmethod
     def _normalize_model_names(
-            model: Union[str, Sequence[str]]) -> tuple[str, list[str]]:
-        """Return (primary, aliases) from a single name or a sequence of names.
+            names: Sequence[str]) -> tuple[str, list[str]]:
+        """Return (primary, aliases) from a sequence of names.
 
         If the primary name points to an existing directory, its basename is used.
         Duplicate aliases are removed while preserving order.
         """
-        names = list(model) if isinstance(model, (list, tuple)) else [model]
         primary = names[0]
         model_dir = Path(primary)
         if model_dir.exists() and model_dir.is_dir():
@@ -1087,6 +1086,9 @@ class OpenAIServer:
                     if strict_guided is not None:
                         sampling_params.guided_decoding = strict_guided
             postproc_args = ChatPostprocArgs.from_request(request)
+            # Echo the resolved alias (or fall back to primary) so streaming
+            # and non-streaming responses return the same model name.
+            postproc_args.model = self._resolve_model_name(request.model)
             disaggregated_params = to_llm_disaggregated_params(
                 request.disaggregated_params)
 
@@ -1408,8 +1410,10 @@ class OpenAIServer:
                 sampling_params.return_perf_metrics = True
             disaggregated_params = to_llm_disaggregated_params(
                 request.disaggregated_params)
+            resolved_model_name = self._resolve_model_name(request.model)
             for idx, prompt in enumerate(prompts):
                 postproc_args = CompletionPostprocArgs.from_request(request)
+                postproc_args.model = resolved_model_name
                 postproc_args.prompt_idx = idx
                 if request.echo:
                     postproc_args.prompt = prompt
@@ -1543,6 +1547,7 @@ class OpenAIServer:
                              tracing.extract_trace_headers(raw_request.headers))
 
             postproc_args = ChatCompletionPostprocArgs.from_request(request)
+            postproc_args.model = self._resolve_model_name(request.model)
             postproc_params = PostprocParams(
                 post_processor=chat_harmony_streaming_post_processor
                 if request.stream else chat_harmony_post_processor,

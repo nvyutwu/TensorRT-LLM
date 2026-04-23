@@ -267,6 +267,18 @@ def get_llm_args(
     return llm_args, llm_args_extra_dict
 
 
+def _resolve_served_model_names(
+        served_model_name: Optional[Sequence[str]],
+        llm_args: dict) -> list[str]:
+    """Normalize click's ``--served_model_name`` into a non-empty list.
+
+    Drops empty strings (click passes ``""`` through for unset flags) and
+    falls back to ``llm_args["model"]`` when no explicit name is provided.
+    """
+    names = [n for n in (served_model_name or []) if n]
+    return names or [llm_args["model"]]
+
+
 def launch_server(
         host: str,
         port: int,
@@ -280,10 +292,9 @@ def launch_server(
         served_model_name: Optional[Sequence[str]] = None):
 
     backend = llm_args["backend"]
-    # served_model_name may be a sequence (tuple from click's multiple=True, or list).
-    # Drop empty strings (click passes "" through) so downstream sees only real names.
-    served_model_names: list[str] = [n for n in (served_model_name or []) if n]
-    model = served_model_names[0] if served_model_names else llm_args["model"]
+    served_model_names = _resolve_served_model_names(served_model_name,
+                                                     llm_args)
+    model = served_model_names[0]
     addr_info = socket.getaddrinfo(host, port, socket.AF_UNSPEC,
                                    socket.SOCK_STREAM)
     address_family = socket.AF_INET6 if all(
@@ -317,7 +328,7 @@ def launch_server(
 
         server = OpenAIServer(
             generator=llm,
-            model=served_model_names if served_model_names else model,
+            model=served_model_names,
             tool_parser=tool_parser,
             server_role=server_role,
             metadata_server_cfg=metadata_server_cfg,
@@ -366,8 +377,8 @@ def launch_grpc_server(host: str,
         logger.info("Initializing TensorRT-LLM gRPC server...")
 
         backend = llm_args.get("backend")
-        _names = [n for n in (served_model_name or []) if n]
-        model_path = _names[0] if _names else llm_args.get("model", "")
+        names = [n for n in (served_model_name or []) if n]
+        model_path = names[0] if names else llm_args.get("model", "")
 
         if backend == "pytorch":
             llm_args.pop("build_config", None)
@@ -470,7 +481,7 @@ def launch_mm_encoder_server(
     mm_encoder = MultimodalEncoder(**encoder_args)
 
     server = OpenAIServer(generator=mm_encoder,
-                          model=model,
+                          model=[model],
                           server_role=ServerRole.MM_ENCODER,
                           metadata_server_cfg=metadata_server_cfg,
                           tool_parser=None)
@@ -504,7 +515,7 @@ def launch_visual_gen_server(
         f"Ulysses size: {visual_gen_model.args.parallel.dit_ulysses_size}")
 
     server = OpenAIServer(generator=visual_gen_model,
-                          model=model,
+                          model=[model],
                           server_role=ServerRole.VISUAL_GEN,
                           metadata_server_cfg=metadata_server_cfg,
                           tool_parser=None)

@@ -16,11 +16,12 @@
 
 import pytest
 
+from tensorrt_llm.commands.serve import _resolve_served_model_names
 from tensorrt_llm.serve.openai_server import OpenAIServer
 
 
-def test_normalize_single_string():
-    assert OpenAIServer._normalize_model_names("m") == ("m", ["m"])
+def test_normalize_single_name():
+    assert OpenAIServer._normalize_model_names(["m"]) == ("m", ["m"])
 
 
 def test_normalize_dedup_preserves_order():
@@ -54,3 +55,15 @@ def test_resolve_known_alias_is_echoed_back():
 def test_resolve_unknown_falls_back_to_primary(requested):
     server = _make_server("primary", ["primary", "alias1"])
     assert server._resolve_model_name(requested) == "primary"
+
+
+@pytest.mark.parametrize("flag,expected", [
+    (None, ["/p/m"]),
+    ((), ["/p/m"]),
+    (("foo", ), ["foo"]),
+    (("foo", "bar"), ["foo", "bar"]),
+    (("foo", "", "bar"), ["foo", "bar"]),
+    (("foo", "bar", "foo"), ["foo", "bar", "foo"]),
+])
+def test_resolve_served_model_names_cli(flag, expected):
+    assert _resolve_served_model_names(flag, {"model": "/p/m"}) == expected
