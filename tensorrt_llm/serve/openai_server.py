@@ -765,20 +765,24 @@ class OpenAIServer:
             names: Sequence[str]) -> tuple[str, list[str]]:
         """Return (primary, aliases) from a sequence of names.
 
-        If the primary name points to an existing directory, its basename is used.
-        Duplicate aliases are removed while preserving order.
+        If the first name points to an existing directory, its basename
+        becomes the primary and the original path is kept as an alias so
+        clients that launched the server by path can still address it.
+        Duplicates are removed while preserving order.
         """
-        primary = names[0]
-        model_dir = Path(primary)
+        first = names[0]
+        model_dir = Path(first)
         if model_dir.exists() and model_dir.is_dir():
-            primary = model_dir.name
-        seen = {primary}
-        aliases = [primary]
-        for n in names[1:]:
-            if n not in seen:
+            candidates = [model_dir.name, first, *names[1:]]
+        else:
+            candidates = list(names)
+        seen: set[str] = set()
+        aliases: list[str] = []
+        for n in candidates:
+            if n and n not in seen:
                 seen.add(n)
                 aliases.append(n)
-        return primary, aliases
+        return aliases[0], aliases
 
     def _is_model_supported(self, model_name: Optional[str]) -> bool:
         """Return True if ``model_name`` is unset or matches a registered name."""
@@ -1823,6 +1827,9 @@ class OpenAIServer:
 
         Follows the OpenAI Images API specification for image generation.
         """
+        error_check_ret = self._check_model(request)
+        if error_check_ret is not None:
+            return error_check_ret
         try:
             image_id = f"image_{uuid.uuid4().hex}"
             params = parse_visual_gen_params(request, image_id)
@@ -1888,6 +1895,9 @@ class OpenAIServer:
         Follows the OpenAI Images API specification for image editing.
         Creates an edited or extended image given an original image and a prompt.
         """
+        error_check_ret = self._check_model(request)
+        if error_check_ret is not None:
+            return error_check_ret
         try:
             image_id = f"image_{uuid.uuid4().hex}"
             params = parse_visual_gen_params(request, image_id)
@@ -1951,6 +1961,9 @@ class OpenAIServer:
         try:
             # Parse request based on content-type
             request = await self._parse_video_generation_request(raw_request)
+            error_check_ret = self._check_model(request)
+            if error_check_ret is not None:
+                return error_check_ret
 
             # Resolve the video encode format (mp4/avi/auto)
             resolved_fmt, resolved_ext = resolve_video_format(
@@ -2089,6 +2102,9 @@ class OpenAIServer:
         try:
             # Parse request based on content-type
             request = await self._parse_video_generation_request(raw_request)
+            error_check_ret = self._check_model(request)
+            if error_check_ret is not None:
+                return error_check_ret
 
             video_id = f"video_{uuid.uuid4().hex}"
             params = parse_visual_gen_params(request,

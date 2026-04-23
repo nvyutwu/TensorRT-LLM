@@ -37,12 +37,32 @@ def test_normalize_dedup_preserves_order():
 
 
 def test_normalize_directory_path_uses_basename(tmp_path):
+    """Primary resolves to basename, but the original path stays a valid alias."""
     model_dir = tmp_path / "ckpt"
     model_dir.mkdir()
     primary, aliases = OpenAIServer._normalize_model_names(
         [str(model_dir), "alias"])
     assert primary == "ckpt"
-    assert aliases == ["ckpt", "alias"]
+    assert aliases == ["ckpt", str(model_dir), "alias"]
+
+
+def test_normalize_directory_path_dedups_basename_and_path(tmp_path):
+    """User-provided 'ckpt' alias after a dir path dedups to a single basename."""
+    model_dir = tmp_path / "ckpt"
+    model_dir.mkdir()
+    _, aliases = OpenAIServer._normalize_model_names(
+        [str(model_dir), "ckpt", "alias"])
+    assert aliases == ["ckpt", str(model_dir), "alias"]
+
+
+def test_is_model_supported_accepts_original_directory_path(tmp_path):
+    """A client that knows the path the server was launched with still gets through."""
+    model_dir = tmp_path / "ckpt"
+    model_dir.mkdir()
+    primary, aliases = OpenAIServer._normalize_model_names([str(model_dir)])
+    server = _make_server(primary, aliases)
+    assert server._is_model_supported(str(model_dir)) is True
+    assert server._is_model_supported("ckpt") is True
 
 
 def _make_server(primary, aliases):
