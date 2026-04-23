@@ -762,17 +762,22 @@ class OpenAIServer:
 
     @staticmethod
     def _normalize_model_names(
-            names: Sequence[str]) -> tuple[str, list[str]]:
+            names: Union[str, Sequence[str]]) -> tuple[str, list[str]]:
         """Return (primary, aliases) from a sequence of names.
 
         If the first name points to an existing directory, its basename
         becomes the primary and the original path is kept as an alias so
         clients that launched the server by path can still address it.
         Duplicates are removed while preserving order.
+
+        A bare ``str`` is accepted as a convenience for callers that still
+        pass a single name; it is treated as ``[name]``.
         """
-        first = names[0]
-        model_dir = Path(first)
-        if model_dir.exists() and model_dir.is_dir():
+        if isinstance(names, str):
+            names = [names]
+        first = names[0] if names else ""
+        model_dir = Path(first) if first else None
+        if model_dir is not None and model_dir.exists() and model_dir.is_dir():
             candidates = [model_dir.name, first, *names[1:]]
         else:
             candidates = list(names)
@@ -782,10 +787,18 @@ class OpenAIServer:
             if n and n not in seen:
                 seen.add(n)
                 aliases.append(n)
+        if not aliases:
+            raise ValueError(
+                "served model names must contain at least one non-empty name")
         return aliases[0], aliases
 
     def _is_model_supported(self, model_name: Optional[str]) -> bool:
-        """Return True if ``model_name`` is unset or matches a registered name."""
+        """Return True if ``model_name`` is unset or matches a registered name.
+
+        Falsy values (``None`` and ``""``) are treated as "unspecified" and
+        accepted — clients that omit the field still get a response. Only
+        explicit unknown names are rejected by :meth:`_check_model`.
+        """
         if not model_name:
             return True
         return model_name in self.served_model_names

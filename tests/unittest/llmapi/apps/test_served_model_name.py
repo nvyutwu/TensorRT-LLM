@@ -55,6 +55,20 @@ def test_normalize_directory_path_dedups_basename_and_path(tmp_path):
     assert aliases == ["ckpt", str(model_dir), "alias"]
 
 
+def test_normalize_file_path_not_treated_as_dir(tmp_path):
+    """A primary that exists as a FILE keeps its full path (no basename rewrite)."""
+    model_file = tmp_path / "ckpt.bin"
+    model_file.write_text("")
+    primary, aliases = OpenAIServer._normalize_model_names([str(model_file)])
+    assert primary == str(model_file)
+    assert aliases == [str(model_file)]
+
+
+def test_normalize_accepts_bare_str():
+    """Defensive: a plain str caller is treated as a single-name list."""
+    assert OpenAIServer._normalize_model_names("m") == ("m", ["m"])
+
+
 def test_is_model_supported_accepts_original_directory_path(tmp_path):
     """A client that knows the path the server was launched with still gets through."""
     model_dir = tmp_path / "ckpt"

@@ -313,7 +313,6 @@ def launch_server(
     backend = llm_args["backend"]
     served_model_names = _resolve_served_model_names(served_model_name,
                                                      llm_args)
-    model = served_model_names[0]
     addr_info = socket.getaddrinfo(host, port, socket.AF_UNSPEC,
                                    socket.SOCK_STREAM)
     address_family = socket.AF_INET6 if all(
