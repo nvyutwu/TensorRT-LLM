@@ -65,6 +65,15 @@ def test_normalize_accepts_bare_str():
     assert OpenAIServer._normalize_model_names("m") == ("m", ["m"])
 
 
+def test_normalize_empty_raises():
+    """Passing an empty sequence (or all-empty-string sequence) must raise."""
+    with pytest.raises(ValueError, match="at least one non-empty"):
+        OpenAIServer._normalize_model_names([])
+
+    with pytest.raises(ValueError, match="at least one non-empty"):
+        OpenAIServer._normalize_model_names(["", ""])
+
+
 def test_is_model_supported_accepts_original_directory_path(tmp_path):
     """A client that knows the path the server was launched with still gets through."""
     model_dir = tmp_path / "ckpt"
@@ -125,7 +134,7 @@ def test_check_model_rejects_unknown_with_404():
         (("foo",), ["foo"]),
         (("foo", "bar"), ["foo", "bar"]),
         (("foo", "", "bar"), ["foo", "bar"]),
-        (("foo", "bar", "foo"), ["foo", "bar", "foo"]),
+        (("foo", "bar", "foo"), ["foo", "bar"]),
     ],
 )
 def test_resolve_served_model_names_cli(flag, expected):

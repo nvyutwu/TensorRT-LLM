@@ -187,7 +187,7 @@ class OpenAIServer:
     def __init__(
             self,
             generator: Union[LLM, MultimodalEncoder, VisualGen],
-            model: Sequence[str],
+            model: Union[str, Sequence[str]],
             tool_parser: Optional[str],
             server_role: Optional[ServerRole],
             metadata_server_cfg: MetadataServerConfig,

@@ -290,10 +290,16 @@ def _resolve_served_model_names(served_model_name: Optional[Sequence[str]],
                                 llm_args: dict) -> list[str]:
     """Normalize click's ``--served_model_name`` into a non-empty list.
 
-    Drops empty strings (click passes ``""`` through for unset flags) and
-    falls back to ``llm_args["model"]`` when no explicit name is provided.
+    Drops empty strings (click passes ``""`` through for unset flags),
+    deduplicates while preserving order, and falls back to
+    ``llm_args["model"]`` when no explicit name is provided.
     """
-    names = [n for n in (served_model_name or []) if n]
+    seen: set[str] = set()
+    names: list[str] = []
+    for n in (served_model_name or []):
+        if n and n not in seen:
+            seen.add(n)
+            names.append(n)
     return names or [llm_args["model"]]
 
 
